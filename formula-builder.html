@@ -1,0 +1,359 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bloomberg · Excel Formula Builder</title>
+<style>
+  :root {
+    --bg: #0a0e14;
+    --bg2: #0f1419;
+    --bg3: #141b24;
+    --bg4: #1a2332;
+    --border: #1e2d3d;
+    --border2: #253447;
+    --amber: #f5a623;
+    --amber2: #e8941a;
+    --amber-dim: rgba(245,166,35,0.12);
+    --amber-glow: rgba(245,166,35,0.06);
+    --green: #4ec9b0;
+    --red: #f44747;
+    --blue: #569cd6;
+    --text: #cdd6e0;
+    --text2: #7a9ab8;
+    --text3: #6b8ba3;
+    --mono: 'Consolas', 'SF Mono', 'Fira Code', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+  body { background: var(--bg); color: var(--text); font-family: var(--mono); font-size: 13px; min-height: 100vh; }
+
+  /* Header */
+  #header { background: var(--bg2); border-bottom: 1px solid var(--border); padding: 0 24px; height: 44px; display: flex; align-items: center; gap: 16px; }
+  .logo { color: var(--amber); font-size: 15px; font-weight: 700; letter-spacing: 1px; }
+  .logo span { color: var(--text2); font-weight: 400; }
+  .back-btn { margin-left: auto; background: var(--bg4); border: 1px solid var(--border2); color: var(--text2); padding: 5px 12px; border-radius: 4px; cursor: pointer; font-size: 11px; font-family: var(--mono); text-decoration: none; }
+  .back-btn:hover { border-color: var(--amber); color: var(--amber); }
+
+  /* Layout */
+  #layout { display: flex; max-width: 1200px; margin: 0 auto; gap: 0; min-height: calc(100vh - 48px); }
+
+  /* Form panel */
+  #form-panel { width: 380px; min-width: 380px; background: var(--bg2); border-right: 1px solid var(--border); padding: 24px 20px; flex-shrink: 0; position: sticky; top: 0; height: calc(100vh - 48px); overflow-y: auto; }
+  #form-panel h2 { color: var(--amber); font-size: 11px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 18px; padding-bottom: 8px; border-bottom: 1px solid var(--border2); }
+
+  .xlb-row { display: flex; gap: 6px; margin-bottom: 8px; align-items: center; }
+  .xlb-label { color: var(--text3); font-size: 10px; font-family: var(--mono); min-width: 80px; }
+  .xlb-input { background: var(--bg3); border: 1px solid var(--border2); color: var(--text); font-family: var(--mono); font-size: 12px; padding: 6px 9px; border-radius: 4px; flex: 1; }
+  .xlb-input:focus { outline: none; border-color: var(--amber); }
+  .xlb-select { background: var(--bg3); border: 1px solid var(--border2); color: var(--text); font-family: var(--mono); font-size: 11px; padding: 6px 9px; border-radius: 4px; width: 100%; }
+  .xlb-select:focus { outline: none; border-color: var(--amber); }
+
+  #xlb-output {
+    background: var(--bg3); border: 1px solid var(--border2); border-radius: 6px;
+    padding: 14px; margin: 16px 0 6px; font-family: var(--mono); font-size: 13px;
+    color: var(--green); min-height: 48px; word-break: break-all; cursor: pointer;
+    line-height: 1.6;
+  }
+  #xlb-output:hover { border-color: var(--amber); }
+  #copy-toast { display: none; color: var(--amber); font-size: 10px; margin-bottom: 8px; font-family: var(--mono); }
+
+  .xlb-hint { color: var(--text3); font-size: 10px; font-family: var(--mono); line-height: 1.7; white-space: pre-line; margin-bottom: 12px; }
+
+  #copy-btn {
+    width: 100%; background: var(--amber); color: #000; border: none; padding: 8px;
+    border-radius: 4px; cursor: pointer; font-family: var(--mono); font-size: 12px;
+    font-weight: 700; margin-top: 4px;
+  }
+  #copy-btn:hover { background: var(--amber2); }
+
+  /* Field reference panel */
+  #qref-panel { flex: 1; padding: 24px 24px 40px; overflow-y: auto; }
+  #qref-panel h2 { color: var(--amber); font-size: 11px; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; margin-bottom: 6px; }
+  #qref-subline { color: var(--text3); font-size: 10px; font-family: var(--mono); margin-bottom: 18px; }
+  #qref-search { background: var(--bg3); border: 1px solid var(--border2); color: var(--text); padding: 7px 10px; border-radius: 4px; font-family: var(--mono); font-size: 11px; outline: none; width: 100%; max-width: 340px; margin-bottom: 14px; }
+  #qref-search:focus { border-color: var(--amber); }
+
+  .xl-qref-cat { color: var(--amber); font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; margin: 16px 0 6px; font-family: var(--mono); padding-bottom: 4px; border-bottom: 1px solid var(--border); }
+  .xl-qref-cat:first-child { margin-top: 0; }
+  .xl-qref-row { display: flex; gap: 10px; align-items: baseline; margin: 3px 0; cursor: pointer; padding: 4px 6px; border-radius: 3px; }
+  .xl-qref-row:hover { background: var(--amber-glow); }
+  .xl-qref-row:hover .xl-qref-field { color: var(--amber); }
+  .xl-qref-field { color: var(--green); font-family: var(--mono); font-size: 11px; min-width: 220px; flex-shrink: 0; }
+  .xl-qref-desc { color: var(--text3); font-size: 10px; font-family: var(--mono); }
+  .xl-qref-badge { font-size: 9px; padding: 1px 4px; border-radius: 3px; margin-left: 4px; vertical-align: middle; }
+  .xl-qref-badge.api-only { background: #0d2b0d; color: #4caf50; }
+  .xl-qref-badge.excel-only { background: #2b1d00; color: var(--amber); }
+  .xl-qref-hidden { display: none; }
+
+  /* Optional/BQL sections */
+  #xlb-dates, #xlb-bql-opts { background: var(--bg3); border: 1px solid var(--border2); border-radius: 4px; padding: 10px 12px; margin-bottom: 8px; }
+  .section-label { color: var(--text3); font-size: 9px; letter-spacing: 1px; text-transform: uppercase; font-family: var(--mono); margin-bottom: 8px; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 5px; height: 5px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+  @media (max-width: 768px) {
+    #layout { flex-direction: column; }
+    #form-panel { width: 100%; min-width: 0; position: static; height: auto; overflow: visible; padding: 16px 14px; }
+    #qref-panel { padding: 16px 14px; }
+    #header { padding: 0 12px; height: 44px; }
+    .logo { font-size: 13px; }
+    .xl-qref-field { min-width: 140px; font-size: 10px; }
+    .xl-qref-desc { font-size: 9px; }
+    .xl-qref-row { padding: 5px 4px; }
+    #xlb-output { font-size: 11px; padding: 10px; }
+    .xlb-row { flex-wrap: wrap; }
+    .xlb-label { min-width: 60px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="header">
+  <div class="logo">◈ BLOOMBERG <span>· Excel Formula Builder</span></div>
+  <a href="/playground.html" class="back-btn">&#8592; Back to Playground</a>
+</div>
+
+<div id="layout">
+
+  <!-- Left: Form -->
+  <div id="form-panel">
+    <h2>Build Formula</h2>
+
+    <div class="xlb-row">
+      <span class="xlb-label">Security</span>
+      <input class="xlb-input" id="xlb-sec" placeholder="e.g. AAPL US Equity" oninput="xlbUpdate()">
+    </div>
+    <div class="xlb-row">
+      <span class="xlb-label">Field(s)</span>
+      <input class="xlb-input" id="xlb-field" placeholder="e.g. PX_LAST" oninput="xlbUpdate()" list="xlb-field-list">
+      <datalist id="xlb-field-list"></datalist>
+    </div>
+    <div class="xlb-row">
+      <span class="xlb-label">Type</span>
+      <select class="xlb-select" id="xlb-type" onchange="xlbToggleDates();xlbUpdate()">
+        <option value="bdp">BDP — Current value</option>
+        <option value="bdh">BDH — Historical series</option>
+        <option value="bds">BDS — Bulk / array data</option>
+        <option value="bql">BQL — Operational / KPI data</option>
+      </select>
+    </div>
+
+    <div id="xlb-dates" style="display:none">
+      <div class="section-label">Date range</div>
+      <div class="xlb-row">
+        <span class="xlb-label">Start date</span>
+        <input class="xlb-input" id="xlb-sd" type="date" oninput="xlbUpdate()">
+      </div>
+      <div class="xlb-row">
+        <span class="xlb-label">End date</span>
+        <input class="xlb-input" id="xlb-ed" type="date" oninput="xlbUpdate()" placeholder="today">
+      </div>
+      <div class="xlb-row">
+        <span class="xlb-label">Periodicity</span>
+        <select class="xlb-select" id="xlb-per" onchange="xlbUpdate()">
+          <option value="DAILY">DAILY</option>
+          <option value="WEEKLY">WEEKLY</option>
+          <option value="MONTHLY">MONTHLY</option>
+          <option value="QUARTERLY">QUARTERLY</option>
+          <option value="YEARLY">YEARLY</option>
+        </select>
+      </div>
+    </div>
+
+    <div id="xlb-bql-opts" style="display:none">
+      <div class="section-label">BQL overrides</div>
+      <div class="xlb-row">
+        <span class="xlb-label">Period</span>
+        <select class="xlb-select" id="xlb-fpt" onchange="xlbUpdate()">
+          <option value="Q">Q — Quarterly</option>
+          <option value="A">A — Annual</option>
+          <option value="S">S — Semi-annual</option>
+        </select>
+      </div>
+      <div class="xlb-row">
+        <span class="xlb-label">Offset</span>
+        <select class="xlb-select" id="xlb-fpo" onchange="xlbUpdate()">
+          <option value="0Q">0Q — Most recent</option>
+          <option value="-1Q">-1Q — 1 quarter ago</option>
+          <option value="-2Q">-2Q — 2 quarters ago</option>
+          <option value="-3Q">-3Q — 3 quarters ago</option>
+          <option value="range(-3Q,0Q)">range(-3Q,0Q) — Last 4 quarters</option>
+          <option value="0A">0A — Current fiscal year</option>
+          <option value="-1A">-1A — Last fiscal year</option>
+        </select>
+      </div>
+      <div class="xlb-row">
+        <span class="xlb-label">Mapping</span>
+        <select class="xlb-select" id="xlb-mapping" onchange="xlbUpdate()">
+          <option value="PRECISE">PRECISE — Actuals only</option>
+          <option value="INCLUSIVE">INCLUSIVE — Actuals + estimates</option>
+        </select>
+      </div>
+      <div class="xlb-row">
+        <span class="xlb-label">Fill</span>
+        <select class="xlb-select" id="xlb-xlfill" onchange="xlbUpdate()">
+          <option value="b">b — Blank if missing</option>
+          <option value="f">f — Forward fill</option>
+        </select>
+      </div>
+    </div>
+
+    <div id="xlb-output" onclick="xlbCopy()" title="Click to copy">=BDP("","")</div>
+    <div id="copy-toast">Copied to clipboard</div>
+    <div class="xlb-hint" id="xlb-hint"></div>
+    <button id="copy-btn" onclick="xlbCopy()">Copy Formula</button>
+  </div>
+
+  <!-- Right: Field reference -->
+  <div id="qref-panel">
+    <h2>Field Reference</h2>
+    <div id="qref-subline">Click any field to populate the builder &nbsp;·&nbsp; <span style="color:var(--green)">API</span> = available via API &nbsp;·&nbsp; <span style="color:var(--amber)">Excel only / BQL</span> = Bloomberg Add-in only</div>
+    <input id="qref-search" placeholder="Search fields..." oninput="filterQref(this.value)">
+    <div id="xlb-qref"></div>
+  </div>
+
+</div>
+
+<script src="fields.js"></script>
+<script>
+/* XL_FIELDS loaded from fields.js */
+
+// ── Build field reference ─────────────────────────────────────────────────────
+function buildQref() {
+  const dl = document.getElementById('xlb-field-list');
+  const qref = document.getElementById('xlb-qref');
+  let html = '';
+  XL_FIELDS.forEach(([cat, fields]) => {
+    const isBqlCat = cat.includes('BQL');
+    html += `<div class="xl-qref-cat">${cat}</div>`;
+    fields.forEach(([mn, desc, api]) => {
+      const badge = api
+        ? `<span class="xl-qref-badge api-only">API</span>`
+        : isBqlCat
+          ? `<span class="xl-qref-badge excel-only">BQL</span>`
+          : `<span class="xl-qref-badge excel-only">Excel only</span>`;
+      html += `<div class="xl-qref-row" data-mn="${mn}" data-desc="${desc}" onclick="xlbUseField('${mn}')">
+        <span class="xl-qref-field">${mn}${badge}</span>
+        <span class="xl-qref-desc">${desc}</span>
+      </div>`;
+      const opt = document.createElement('option'); opt.value = mn; dl.appendChild(opt);
+    });
+  });
+  qref.innerHTML = html;
+}
+
+function filterQref(q) {
+  const term = q.trim().toLowerCase();
+  document.querySelectorAll('.xl-qref-row').forEach(row => {
+    const match = !term || row.dataset.mn.toLowerCase().includes(term) || row.dataset.desc.toLowerCase().includes(term);
+    row.classList.toggle('xl-qref-hidden', !match);
+  });
+  // Hide category headers that have no visible rows
+  document.querySelectorAll('.xl-qref-cat').forEach(cat => {
+    let next = cat.nextElementSibling;
+    let anyVisible = false;
+    while (next && !next.classList.contains('xl-qref-cat')) {
+      if (!next.classList.contains('xl-qref-hidden')) anyVisible = true;
+      next = next.nextElementSibling;
+    }
+    cat.style.display = anyVisible ? '' : 'none';
+  });
+}
+
+// ── Formula logic ─────────────────────────────────────────────────────────────
+function xlbToggleDates() {
+  const t = document.getElementById('xlb-type').value;
+  document.getElementById('xlb-dates').style.display    = t === 'bdh' ? '' : 'none';
+  document.getElementById('xlb-bql-opts').style.display = t === 'bql' ? '' : 'none';
+}
+
+function xlbUseField(mn) {
+  const cur = document.getElementById('xlb-field').value;
+  const fields = cur ? cur.split(',').map(s => s.trim()).filter(Boolean) : [];
+  if (!fields.includes(mn)) fields.push(mn);
+  document.getElementById('xlb-field').value = fields.join(',');
+  // Auto-switch to BQL if it's a BQL-only field
+  const bqlCat = XL_FIELDS.find(([cat]) => cat.includes('BQL'));
+  if (bqlCat && bqlCat[1].find(([m]) => m === mn)) {
+    document.getElementById('xlb-type').value = 'bql';
+    xlbToggleDates();
+  }
+  xlbUpdate();
+}
+
+function xlDateFmt(d) {
+  if (!d) return '';
+  const [y, m, dd] = d.split('-');
+  return `${parseInt(m)}/${parseInt(dd)}/${y}`;
+}
+
+function xlbUpdate() {
+  const sec    = document.getElementById('xlb-sec').value.trim() || '<TICKER>';
+  const raw    = document.getElementById('xlb-field').value.trim();
+  const fields = raw ? raw.split(',').map(s => s.trim()).filter(Boolean) : ['<FIELD>'];
+  const type   = document.getElementById('xlb-type').value;
+
+  let formula = '', hint = '';
+
+  if (type === 'bdp') {
+    formula = fields.length === 1
+      ? `=BDP("${sec}","${fields[0]}")`
+      : fields.map(f => `=BDP("${sec}","${f}")`).join('\n');
+    hint = 'BDP returns a single current value per cell.\nOne formula per field — paste into separate cells.';
+
+  } else if (type === 'bdh') {
+    const sd  = xlDateFmt(document.getElementById('xlb-sd')?.value) || 'YYYYMMDD';
+    const ed  = xlDateFmt(document.getElementById('xlb-ed')?.value) || 'TODAY()';
+    const per = document.getElementById('xlb-per')?.value || 'DAILY';
+    formula = `=BDH("${sec}","${fields.join(',')}","${sd}","${ed}","periodicitySelection","${per}")`;
+    hint = 'BDH is an array formula.\nSelect a multi-row range first, type the formula, then press Ctrl+Shift+Enter.';
+
+  } else if (type === 'bql') {
+    const fpt     = document.getElementById('xlb-fpt')?.value     || 'Q';
+    const fpo     = document.getElementById('xlb-fpo')?.value     || '0Q';
+    const mapping = document.getElementById('xlb-mapping')?.value || 'PRECISE';
+    const xlfill  = document.getElementById('xlb-xlfill')?.value  || 'b';
+    formula = `=BQL("${sec}","${fields[0]}","FPT=${fpt}","FPO=${fpo}","ACT_EST_MAPPING=${mapping}","FS=MRC","CURRENCY=USD","XLFILL=${xlfill}")`;
+    hint = 'BQL requires the Bloomberg Excel Add-in — not available via the API.\nUsed for operational / KPI data (deliveries, subscribers, units sold, RevPAR, etc.).\nArray formula: select a range, enter the formula, press Ctrl+Shift+Enter.';
+
+  } else {
+    formula = `=BDS("${sec}","${fields[0]}")`;
+    hint = 'BDS is an array formula.\nSelect a multi-row range first, then press Ctrl+Shift+Enter.';
+  }
+
+  // Warn about Excel-only fields used with BDP/BDH
+  const flat = XL_FIELDS.flatMap(([,f]) => f);
+  if (type !== 'bql') {
+    const xlOnly = fields.filter(f => { const found = flat.find(([m]) => m === f.toUpperCase()); return found && !found[2]; });
+    if (xlOnly.length) {
+      hint += `\n\nWarning: ${xlOnly.join(', ')} — these fields are Excel Add-in only and will not work via the Bloomberg API (/bdp).`;
+    }
+  }
+
+  document.getElementById('xlb-output').textContent = formula;
+  document.getElementById('xlb-hint').innerHTML = hint.replace(/\n/g, '<br>');
+}
+
+function xlbCopy() {
+  const f = document.getElementById('xlb-output').textContent;
+  navigator.clipboard.writeText(f).then(() => {
+    const toast = document.getElementById('copy-toast');
+    toast.style.display = 'block';
+    setTimeout(() => toast.style.display = 'none', 1500);
+  });
+  const el = document.getElementById('xlb-output');
+  const orig = el.style.borderColor;
+  el.style.borderColor = 'var(--amber)';
+  setTimeout(() => el.style.borderColor = orig, 1000);
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+buildQref();
+xlbUpdate();
+</script>
+</body>
+</html>

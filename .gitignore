@@ -1,0 +1,16 @@
+config.json
+*.log
+__pycache__/
+.claude/
+*.pyc
+tunnel-stdout.txt
+tunnel-url.txt
+bbg-tunnel.yml
+bloomberg-tunnel.yml
+openbb-tunnel.yml
+.env
+node_modules/
+*.bat
+*.credentials
+test_chat.py
+test_chat_urls.py

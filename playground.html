@@ -1,0 +1,2552 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bloomberg · API Playground</title>
+<style>
+  :root {
+    --bg: #0a0e14;
+    --bg2: #0f1419;
+    --bg3: #141b24;
+    --bg4: #1a2332;
+    --border: #1e2d3d;
+    --border2: #253447;
+    --amber: #f5a623;
+    --amber2: #e8941a;
+    --amber-dim: rgba(245,166,35,0.12);
+    --amber-glow: rgba(245,166,35,0.06);
+    --green: #4ec9b0;
+    --red: #f44747;
+    --blue: #569cd6;
+    --purple: #c586c0;
+    --text: #cdd6e0;
+    --text2: #7a9ab8;
+    --text3: #6b8ba3;
+    --mono: 'Consolas', 'SF Mono', 'Fira Code', monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  :focus-visible { outline: 2px solid var(--amber); outline-offset: 2px; }
+  body { background: var(--bg); color: var(--text); font-family: var(--mono); font-size: 13px; height: 100vh; overflow: hidden; display: flex; flex-direction: column; }
+
+  /* Header */
+  #header { background: var(--bg2); border-bottom: 1px solid var(--border); padding: 0 16px; height: 44px; display: flex; align-items: center; gap: 16px; flex-shrink: 0; }
+  #header .logo { color: var(--amber); font-size: 15px; font-weight: 700; letter-spacing: 1px; white-space: nowrap; }
+  #header .logo span { color: var(--text2); font-weight: 400; }
+  /* API toggle */
+  #api-toggle { display: flex; background: var(--bg3); border: 1px solid var(--border2); border-radius: 5px; overflow: hidden; flex-shrink: 0; }
+  .api-btn { padding: 4px 12px; cursor: pointer; font-size: 11px; font-family: var(--mono); color: var(--text3); border: none; background: none; transition: all .15s; }
+  .api-btn.active { background: var(--amber); color: #000; font-weight: 700; }
+  .api-btn:not(.active):hover { color: var(--amber); }
+  #status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--red); flex-shrink: 0; transition: background .3s; }
+  #status-dot.ok { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  #status-label { color: var(--text3); font-size: 11px; }
+  #header-spacer { flex: 1; }
+  .header-btn { background: var(--bg4); border: 1px solid var(--border2); color: var(--text2); padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 11px; font-family: var(--mono); }
+  .header-btn:hover { border-color: var(--amber); color: var(--amber); }
+
+  /* Layout */
+  #layout { display: flex; flex: 1; overflow: hidden; }
+  #sidebar { width: 260px; min-width: 260px; background: var(--bg2); border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; flex-shrink: 0; }
+  #main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* Sidebar */
+  #sidebar-search { padding: 8px 10px 6px; border-bottom: 1px solid var(--border); }
+  #sidebar-search input { width: 100%; background: var(--bg3); border: 1px solid var(--border2); color: var(--text); padding: 6px 8px; border-radius: 4px; font-family: var(--mono); font-size: 11px; outline: none; }
+  #sidebar-search input:focus { border-color: var(--amber); }
+  #sidebar-search input::placeholder { color: var(--text3); }
+  #sidebar-tags { padding: 6px 8px 5px; display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--border); }
+  .filter-tag { background: var(--bg3); border: 1px solid var(--border2); color: var(--text3); padding: 2px 7px; border-radius: 10px; font-size: 10px; cursor: pointer; font-family: var(--mono); white-space: nowrap; transition: all .1s; }
+  .filter-tag:hover { color: var(--text); border-color: var(--amber); }
+  .filter-tag.active { background: var(--amber-dim); color: var(--amber); border-color: var(--amber); }
+  #sidebar-list { flex: 1; overflow-y: auto; padding-bottom: 10px; }
+  #sidebar-list::-webkit-scrollbar { width: 4px; }
+  #sidebar-list::-webkit-scrollbar-track { background: transparent; }
+  #sidebar-list::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+  .cat-header { padding: 7px 10px 5px; color: var(--amber); font-size: 10px; letter-spacing: 1px; text-transform: uppercase; font-weight: 700; cursor: pointer; display: flex; justify-content: space-between; align-items: center; user-select: none; border-top: 1px solid var(--border); }
+  .cat-header:first-child { border-top: none; }
+  .cat-header:hover { background: var(--amber-glow); }
+  .cat-toggle { font-size: 8px; color: var(--text3); }
+  .example-item { padding: 5px 10px 5px 13px; cursor: pointer; border-left: 2px solid transparent; transition: all .12s; }
+  .example-item:hover { background: var(--amber-glow); border-left-color: var(--amber); }
+  .example-item.active { background: var(--amber-dim); border-left-color: var(--amber); }
+  .ex-endpoint { display: flex; align-items: center; gap: 5px; margin-bottom: 2px; }
+  .method-tag { background: #0d2b0d; color: #4caf50; font-size: 9px; padding: 1px 4px; border-radius: 2px; font-family: var(--mono); font-weight: 700; flex-shrink: 0; }
+  .ep-path { color: var(--text2); font-size: 10px; font-family: var(--mono); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 180px; }
+  .example-item .ex-name { color: var(--text); font-size: 11px; font-weight: 500; }
+  .example-item .ex-desc { color: var(--text3); font-size: 10px; margin-top: 1px; }
+
+  /* Request panel */
+  #request-panel { background: var(--bg2); border-bottom: 1px solid var(--border); padding: 12px 16px; flex-shrink: 0; }
+  #url-row { display: flex; gap: 8px; align-items: center; margin-bottom: 10px; }
+  #method-badge { background: var(--amber-dim); color: var(--amber); border: 1px solid var(--amber); border-radius: 4px; padding: 5px 10px; font-size: 11px; font-weight: 700; flex-shrink: 0; }
+  #url-input { flex: 1; background: var(--bg3); border: 1px solid var(--border2); color: var(--text); padding: 6px 10px; border-radius: 4px; font-family: var(--mono); font-size: 12px; outline: none; }
+  #url-input:focus { border-color: var(--amber); }
+  #send-btn { background: var(--amber); color: #000; border: none; padding: 6px 18px; border-radius: 4px; cursor: pointer; font-family: var(--mono); font-size: 12px; font-weight: 700; flex-shrink: 0; transition: background .15s; }
+  #send-btn:hover { background: var(--amber2); }
+  #send-btn:active { transform: scale(0.97); }
+  #send-btn.loading { background: var(--bg4); color: var(--text3); cursor: wait; }
+
+  /* Params editor */
+  #params-area { display: flex; gap: 8px; flex-wrap: wrap; align-items: flex-start; }
+  .param-group { display: flex; gap: 6px; align-items: center; background: var(--bg3); border: 1px solid var(--border2); border-radius: 4px; padding: 4px 8px; }
+  .param-required { border-color: var(--amber) !important; }
+  .param-required .param-val::placeholder { color: var(--amber); opacity: 0.8; }
+  .param-key { color: var(--blue); font-size: 11px; white-space: nowrap; }
+  .param-sep { color: var(--text3); font-size: 11px; }
+  .param-val { background: transparent; border: none; color: var(--green); font-family: var(--mono); font-size: 11px; outline: none; min-width: 60px; max-width: 200px; }
+  .param-del { color: var(--text3); cursor: pointer; font-size: 14px; line-height: 1; margin-left: 2px; }
+  .param-del:hover { color: var(--red); }
+  #add-param-btn { background: var(--bg3); border: 1px dashed var(--border2); color: var(--text3); padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 11px; font-family: var(--mono); }
+  #add-param-btn:hover { border-color: var(--amber); color: var(--amber); }
+
+  /* Tabs */
+  #tabs { display: flex; background: var(--bg2); border-bottom: 1px solid var(--border); padding: 0 16px; flex-shrink: 0; }
+  .tab { padding: 8px 14px; color: var(--text3); cursor: pointer; border-bottom: 2px solid transparent; font-size: 12px; transition: all .15s; }
+  .tab:hover { color: var(--text); }
+  .tab.active { color: var(--amber); border-bottom-color: var(--amber); }
+  #response-meta { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+  #response-status { font-size: 11px; }
+  #response-time { color: var(--text3); font-size: 11px; }
+  #copy-btn { background: none; border: 1px solid var(--border2); color: var(--text3); padding: 3px 8px; border-radius: 3px; cursor: pointer; font-size: 10px; font-family: var(--mono); }
+  #copy-btn:hover { border-color: var(--amber); color: var(--amber); }
+
+  /* Response area */
+  #response-area { flex: 1; overflow: hidden; position: relative; }
+  .tab-content { display: none; height: 100%; overflow: auto; padding: 12px 16px; }
+  .tab-content.active { display: block; }
+  .tab-content::-webkit-scrollbar { width: 6px; height: 6px; }
+  .tab-content::-webkit-scrollbar-track { background: transparent; }
+  .tab-content::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+  /* JSON viewer */
+  #json-view { font-size: 12px; line-height: 1.7; white-space: pre-wrap; word-break: break-all; }
+  .j-key { color: var(--blue); }
+  .j-str { color: var(--green); }
+  .j-num { color: #b5cea8; }
+  .j-bool { color: var(--amber); }
+  .j-null { color: var(--text3); }
+  .j-bracket { color: var(--text2); }
+
+  /* Table view */
+  #table-view { font-size: 12px; }
+  #table-view table { width: 100%; border-collapse: collapse; }
+  #table-view th { background: var(--bg3); color: var(--amber); text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--border2); font-size: 11px; position: sticky; top: 0; white-space: nowrap; cursor: pointer; user-select: none; }
+  #table-view th:hover { background: var(--bg4); }
+  #table-view th .sort-arrow { color: var(--text3); margin-left: 4px; }
+  #table-view td { padding: 5px 10px; border-bottom: 1px solid var(--border); color: var(--text); white-space: nowrap; max-width: 220px; overflow: hidden; text-overflow: ellipsis; }
+  #table-view tr:hover td { background: var(--amber-glow); }
+  .td-num { color: #b5cea8; text-align: right; }
+  .td-pos { color: #4ec980; }
+  .td-neg { color: var(--red); }
+
+  /* Chart view */
+  #chart-view { padding: 12px 0; }
+  #chart-canvas { width: 100%; height: 280px; }
+
+  /* Bloomberg code view */
+  #blp-view { font-size: 12px; line-height: 1.7; }
+
+  /* Excel view */
+  #excel-view { padding: 4px 0; }
+  .xl-section { color: var(--amber); font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; border-bottom: 1px solid var(--border2); padding-bottom: 4px; margin: 14px 0 8px; font-family: var(--mono); }
+  .xl-section:first-child { margin-top: 4px; }
+  .xl-row { display: flex; align-items: flex-start; gap: 10px; margin: 5px 0; }
+  .xl-label { color: var(--text3); font-size: 10px; font-family: var(--mono); min-width: 80px; padding-top: 2px; }
+  .xl-formula { color: var(--green); font-size: 12px; font-family: var(--mono); background: var(--bg3); padding: 4px 8px; border-radius: 3px; border: 1px solid var(--border2); flex: 1; cursor: pointer; word-break: break-all; }
+  .xl-formula:hover { border-color: var(--amber); }
+  .xl-note { color: var(--text3); font-size: 10px; font-family: var(--mono); margin: 4px 0 0 90px; line-height: 1.5; }
+  .xl-copy-hint { color: var(--text3); font-size: 10px; font-family: var(--mono); margin-top: 14px; text-align: center; }
+  /* Formula builder */
+  .xlb-row { display: flex; gap: 6px; margin-bottom: 6px; align-items: center; }
+  .xlb-label { color: var(--text3); font-size: 10px; font-family: var(--mono); min-width: 70px; }
+  .xlb-input { background: var(--bg3); border: 1px solid var(--border2); color: var(--text); font-family: var(--mono); font-size: 11px; padding: 4px 7px; border-radius: 3px; flex: 1; }
+  .xlb-input:focus { outline: none; border-color: var(--amber); }
+  .xlb-select { background: var(--bg3); border: 1px solid var(--border2); color: var(--text); font-family: var(--mono); font-size: 11px; padding: 4px 7px; border-radius: 3px; }
+  .xlb-output { background: var(--bg2); border: 1px solid var(--border2); border-radius: 4px; padding: 10px; margin: 10px 0; font-family: var(--mono); font-size: 12px; color: var(--green); min-height: 36px; word-break: break-all; cursor: pointer; }
+  .xlb-output:hover { border-color: var(--amber); }
+  .xlb-hint { color: var(--text3); font-size: 10px; font-family: var(--mono); line-height: 1.6; }
+  .xl-qref-cat { color: var(--amber); font-size: 10px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; margin: 12px 0 4px; font-family: var(--mono); }
+  .xl-qref-row { display: flex; gap: 8px; align-items: baseline; margin: 2px 0; cursor: pointer; }
+  .xl-qref-row:hover .xl-qref-field { color: var(--amber); }
+  .xl-qref-field { color: var(--green); font-family: var(--mono); font-size: 11px; min-width: 200px; }
+  .xl-qref-desc { color: var(--text3); font-size: 10px; font-family: var(--mono); }
+  .xl-qref-badge { font-size: 9px; padding: 1px 4px; border-radius: 3px; margin-left: 4px; }
+  .xl-qref-badge.api-only { background: #0d2b0d; color: #4caf50; }
+  .xl-qref-badge.excel-only { background: #2b1d00; color: var(--amber); }
+  .xl-qref-hidden { display: none; }
+  .xlb-hint { white-space: pre-line; }
+  .blp-comment { color: var(--text3); }
+  .blp-keyword { color: var(--purple); }
+  .blp-string { color: var(--green); }
+  .blp-func { color: var(--amber); }
+  .blp-var { color: var(--blue); }
+  .blp-num { color: #b5cea8; }
+  .blp-section { color: var(--amber); font-weight: 700; border-bottom: 1px solid var(--border2); padding-bottom: 4px; margin: 16px 0 8px; }
+
+  /* Excel Bridge */
+  .bridge-code { background: var(--bg3); border: 1px solid var(--border2); border-radius: 4px; padding: 12px 14px; font-family: var(--mono); font-size: 11px; color: var(--green); line-height: 1.7; white-space: pre; overflow-x: auto; cursor: pointer; }
+  .bridge-code:hover { border-color: var(--amber); }
+  .xl-tab { padding: 5px 14px; color: var(--text3); cursor: pointer; border-bottom: 2px solid transparent; font-size: 11px; font-family: var(--mono); transition: all .15s; background: none; border-top: none; border-left: none; border-right: none; }
+  .xl-tab:hover { color: var(--text); }
+  .xl-tab.active { color: var(--amber); border-bottom-color: var(--amber); }
+
+  /* Empty state */
+  #empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--text3); gap: 10px; }
+  #empty-state .big { font-size: 32px; }
+  #empty-state .hint { font-size: 12px; }
+  #empty-state kbd { background: var(--bg3); border: 1px solid var(--border2); border-radius: 3px; padding: 2px 6px; color: var(--text2); font-family: var(--mono); }
+
+  /* Error state */
+  .error-banner { background: rgba(244,71,71,0.1); border: 1px solid rgba(244,71,71,0.3); border-radius: 4px; padding: 10px 14px; color: var(--red); font-size: 12px; margin-bottom: 10px; }
+
+  /* Loading */
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .spinner { display: inline-block; width: 12px; height: 12px; border: 2px solid var(--border2); border-top-color: var(--amber); border-radius: 50%; animation: spin .7s linear infinite; vertical-align: middle; }
+
+  /* Chat panel */
+  #chat-panel { width: 320px; min-width: 320px; background: var(--bg2); border-left: 1px solid var(--border); display: flex; flex-direction: column; flex-shrink: 0; transition: width .2s; }
+  #chat-panel.collapsed { width: 0; min-width: 0; overflow: hidden; }
+  #chat-header { padding: 10px 14px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  #chat-header-title { color: var(--amber); font-size: 12px; font-weight: 700; flex: 1; }
+  #chat-header-sub { color: var(--text3); font-size: 10px; }
+  #chat-messages { flex: 1; overflow-y: auto; padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+  #chat-messages::-webkit-scrollbar { width: 4px; }
+  #chat-messages::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+  .chat-msg { display: flex; flex-direction: column; gap: 3px; }
+  .chat-msg.user .bubble { background: var(--amber-dim); border: 1px solid rgba(245,166,35,0.2); color: var(--text); align-self: flex-end; border-radius: 8px 8px 2px 8px; }
+  .chat-msg.assistant .bubble { background: var(--bg3); border: 1px solid var(--border2); color: var(--text); align-self: flex-start; border-radius: 8px 8px 8px 2px; }
+  .bubble { padding: 8px 10px; font-size: 12px; line-height: 1.6; max-width: 100%; word-break: break-word; white-space: pre-wrap; }
+  .bubble code { background: var(--bg4); padding: 1px 4px; border-radius: 3px; font-size: 11px; color: var(--green); }
+  .bubble pre { background: var(--bg4); border: 1px solid var(--border); border-radius: 4px; padding: 8px; margin: 6px 0; overflow-x: auto; font-size: 11px; }
+  .bubble pre code { background: none; padding: 0; }
+  .use-btn { font-size: 10px; color: var(--amber); cursor: pointer; background: none; border: none; font-family: var(--mono); padding: 2px 0; align-self: flex-end; }
+  .use-btn:hover { text-decoration: underline; }
+  .api-call-block { display: flex; align-items: flex-start; gap: 8px; margin: 4px 0; flex-wrap: wrap; }
+  a.api-link { color: var(--text2); font-family: var(--mono); font-size: 10px; text-decoration: none; background: var(--bg4); padding: 3px 6px; border-radius: 3px; border: 1px solid var(--border2); word-break: break-all; flex: 1; min-width: 0; }
+  .run-btn { flex-shrink: 0; background: var(--amber); color: #000; border: none; padding: 3px 10px; border-radius: 3px; cursor: pointer; font-family: var(--mono); font-size: 11px; font-weight: 700; white-space: nowrap; }
+  .run-btn:hover { background: var(--amber2); }
+  #chat-typing { color: var(--text3); font-size: 11px; padding: 4px 12px; display: none; }
+  #chat-input-row { padding: 10px 12px; border-top: 1px solid var(--border); display: flex; gap: 8px; flex-shrink: 0; }
+  #chat-input { flex: 1; background: var(--bg3); border: 1px solid var(--border2); color: var(--text); padding: 7px 10px; border-radius: 4px; font-family: var(--mono); font-size: 12px; outline: none; resize: none; height: 36px; max-height: 100px; overflow-y: auto; }
+  #chat-input:focus { border-color: var(--amber); }
+  #chat-input::placeholder { color: var(--text3); }
+  #chat-send { background: var(--amber); color: #000; border: none; border-radius: 4px; padding: 0 12px; cursor: pointer; font-family: var(--mono); font-size: 12px; font-weight: 700; flex-shrink: 0; }
+  #chat-send:hover { background: var(--amber2); }
+  #chat-send:disabled { background: var(--bg4); color: var(--text3); cursor: wait; }
+  /* Chat toggle button */
+  #chat-toggle { background: none; border: 1px solid var(--border2); color: var(--text3); padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 11px; font-family: var(--mono); flex-shrink: 0; }
+  #chat-toggle:hover { border-color: var(--amber); color: var(--amber); }
+  #chat-toggle.active { border-color: var(--amber); color: var(--amber); background: var(--amber-dim); }
+
+  /* Scrollbar global */
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+  @media (max-width: 768px) {
+    /* Sidebar: hidden by default, shown as overlay when toggled */
+    #sidebar { display: none; position: fixed; z-index: 200; left: 0; top: 44px; bottom: 0; width: 280px; background: var(--bg2); box-shadow: 4px 0 20px rgba(0,0,0,.5); }
+    body.sidebar-open #sidebar { display: flex; }
+
+    /* Sidebar overlay backdrop */
+    .sidebar-backdrop { display: none; position: fixed; inset: 0; z-index: 199; background: rgba(0,0,0,.4); }
+    body.sidebar-open .sidebar-backdrop { display: block; }
+
+    /* Header: wrap, smaller padding */
+    #header { flex-wrap: wrap; height: auto; min-height: 44px; padding: 6px 10px; gap: 6px; }
+    #header .logo { font-size: 13px; }
+    #header-spacer { display: none; }
+
+    /* Mobile menu button visible */
+    #mobile-menu-btn { display: inline-flex !important; }
+
+    /* API toggle smaller */
+    .api-btn { padding: 3px 8px; font-size: 10px; }
+
+    /* Chat panel: full-screen overlay when open */
+    #chat-panel { position: fixed; z-index: 150; inset: 0; width: 100% !important; min-width: 0; border: none; }
+    #chat-panel.collapsed { display: none; }
+
+    /* Main area fills full width */
+    #layout { flex-direction: column; }
+    #main { width: 100%; min-width: 0; }
+
+    /* Request panel */
+    #url-row { flex-wrap: wrap; gap: 6px; }
+    #url-input { width: 100%; min-width: 0; font-size: 11px; }
+    #send-btn { width: 100%; }
+    #method-badge { display: none; }
+
+    /* Param pills wrap */
+    #params-area { gap: 4px; }
+    .param-group { max-width: 100%; }
+    .param-val { max-width: 120px; }
+
+    /* Tabs: horizontal scroll */
+    #tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; flex-wrap: nowrap; padding: 0 8px; }
+    .tab { white-space: nowrap; flex-shrink: 0; padding: 8px 10px; font-size: 11px; }
+    #response-meta { display: none; }
+
+    /* Response area */
+    .tab-content { padding: 8px 10px; }
+    #json-view { font-size: 11px; }
+
+    /* Table view: horizontal scroll */
+    #table-view { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+    #table-view table { min-width: 500px; }
+
+    /* Formula Builder: full width naturally */
+    .xlb-row { flex-wrap: wrap; }
+    .xlb-label { min-width: 60px; }
+    .xl-qref-field { min-width: 140px; font-size: 10px; }
+    .xl-qref-desc { font-size: 9px; }
+
+    /* Bridge tab */
+    .bridge-code { font-size: 10px; padding: 8px 10px; }
+
+    /* Touch targets */
+    .filter-tag { padding: 6px 10px; font-size: 11px; }
+    .param-del { padding: 8px; font-size: 18px; }
+    .xl-qref-row { padding: 10px 6px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="header">
+  <button id="mobile-menu-btn" aria-label="Toggle navigation menu" onclick="document.body.classList.toggle('sidebar-open')" style="display:none;background:none;border:1px solid var(--border2);color:var(--amber);font-size:16px;padding:6px 10px;border-radius:4px;cursor:pointer;font-family:var(--mono);">&#9776;</button>
+  <div class="logo">BLOOMBERG <span>// API PLAYGROUND</span></div>
+  <div id="api-toggle">
+    <button class="api-btn active" id="btn-bbg" onclick="switchApi('bbg')">BBG Terminal</button>
+    <button class="api-btn" id="btn-openbb" onclick="switchApi('openbb')">OpenBB</button>
+  </div>
+  <div id="status-dot"></div>
+  <div id="status-label">connecting...</div>
+  <div id="header-spacer"></div>
+  <button class="header-btn" onclick="openDocs()">API Docs</button>
+  <button class="header-btn" onclick="clearHistory()">Clear</button>
+  <button id="chat-toggle" class="active" onclick="toggleChat()">◈ AI Assistant</button>
+  <button class="header-btn" onclick="openSettings()" title="API Keys">⚙</button>
+</div>
+
+<!-- Settings modal -->
+<div id="settings-modal" role="dialog" aria-modal="true" aria-label="Settings" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1000;align-items:center;justify-content:center;overflow-y:auto">
+  <div style="background:var(--bg2);border:1px solid var(--border2);border-radius:8px;padding:24px;width:480px;max-width:95vw;font-family:var(--mono);margin:20px auto">
+    <div style="color:var(--amber);font-size:14px;font-weight:700;margin-bottom:16px">&#9881; SETTINGS</div>
+
+    <div style="color:var(--amber);font-size:10px;letter-spacing:1px;font-weight:700;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--border2)">API ENDPOINTS</div>
+    <div style="color:var(--text3);font-size:10px;margin-bottom:10px">Configure where the playground sends API requests. Leave blank to use same-origin proxy.</div>
+    <div style="display:flex;gap:8px;margin-bottom:6px;align-items:center">
+      <label style="color:var(--text2);font-size:10px;min-width:100px">Bloomberg API</label>
+      <input id="settings-bbg-url" placeholder="http://127.0.0.1:8195"
+        style="flex:1;background:var(--bg3);border:1px solid var(--border2);color:var(--text);padding:6px 8px;border-radius:4px;font-family:var(--mono);font-size:11px;outline:none">
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:6px;align-items:center">
+      <label style="color:var(--text2);font-size:10px;min-width:100px">OpenBB API</label>
+      <input id="settings-openbb-url" placeholder="http://127.0.0.1:6900"
+        style="flex:1;background:var(--bg3);border:1px solid var(--border2);color:var(--text);padding:6px 8px;border-radius:4px;font-family:var(--mono);font-size:11px;outline:none">
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:14px;align-items:center">
+      <label style="color:var(--text2);font-size:10px;min-width:100px">Display name</label>
+      <input id="settings-display-name" placeholder="My Bloomberg Terminal"
+        style="flex:1;background:var(--bg3);border:1px solid var(--border2);color:var(--text);padding:6px 8px;border-radius:4px;font-family:var(--mono);font-size:11px;outline:none">
+    </div>
+
+    <div style="color:var(--amber);font-size:10px;letter-spacing:1px;font-weight:700;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--border2)">AI ASSISTANT</div>
+    <div style="color:var(--text2);font-size:10px;margin-bottom:6px">ANTHROPIC_API_KEY <span style="color:var(--text3)">(required for chatbot)</span></div>
+    <input id="settings-apikey" type="password" placeholder="sk-ant-api03-..."
+      style="width:100%;background:var(--bg3);border:1px solid var(--border2);color:var(--text);padding:6px 8px;border-radius:4px;font-family:var(--mono);font-size:11px;outline:none;margin-bottom:4px">
+    <div id="settings-status" style="font-size:10px;color:var(--text3);min-height:14px;margin-bottom:14px"></div>
+
+    <div style="display:flex;gap:8px;justify-content:space-between;align-items:center">
+      <button onclick="resetSettings()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-family:var(--mono);font-size:10px;text-decoration:underline">Reset defaults</button>
+      <div style="display:flex;gap:8px;">
+        <button onclick="closeSettings()" style="background:var(--bg4);border:1px solid var(--border2);color:var(--text2);padding:6px 14px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:12px">Cancel</button>
+        <button onclick="saveSettings()" style="background:var(--amber);color:#000;border:none;padding:6px 18px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:12px;font-weight:700">Save</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="layout">
+  <!-- Sidebar -->
+  <div id="sidebar">
+    <div id="sidebar-search">
+      <input type="text" id="search-input" placeholder="Search endpoints..." oninput="filterExamples(this.value)">
+    </div>
+    <div id="sidebar-tags"></div>
+    <div id="sidebar-list"></div>
+  </div>
+  <div class="sidebar-backdrop" onclick="document.body.classList.remove('sidebar-open')"></div>
+
+  <!-- Main -->
+  <div id="main" style="min-width:0">
+    <!-- Request -->
+    <div id="request-panel">
+      <div id="url-row">
+        <div id="method-badge">GET</div>
+        <input type="text" id="url-input" placeholder="/endpoint?param=value">
+        <button id="send-btn" onclick="sendRequest()">SEND</button>
+      </div>
+      <div id="params-area"></div>
+    </div>
+
+    <!-- Tabs -->
+    <div id="tabs" role="tablist">
+      <button class="tab active" role="tab" aria-selected="true" aria-controls="tab-response" onclick="switchTab('response')">Response</button>
+      <button class="tab" role="tab" aria-selected="false" aria-controls="tab-table" onclick="switchTab('table')">Table</button>
+      <button class="tab" role="tab" aria-selected="false" aria-controls="tab-chart" onclick="switchTab('chart')">Chart</button>
+      <button class="tab" role="tab" aria-selected="false" aria-controls="tab-blp" onclick="switchTab('blp')">Bloomberg Code</button>
+      <button class="tab" role="tab" aria-selected="false" aria-controls="tab-excel" onclick="switchTab('excel')">Excel</button>
+      <button class="tab" role="tab" aria-selected="false" aria-controls="tab-formula" onclick="switchTab('formula')">Formula Builder</button>
+      <button class="tab" role="tab" aria-selected="false" aria-controls="tab-bridge" onclick="switchTab('bridge')">Excel Bridge</button>
+      <div id="response-meta">
+        <span id="response-status"></span>
+        <span id="response-time"></span>
+        <button id="copy-btn" onclick="copyResponse()" style="display:none">Copy JSON</button>
+      </div>
+    </div>
+
+    <!-- Response area -->
+    <div id="response-area">
+      <div id="tab-response" class="tab-content active" role="tabpanel">
+        <div id="empty-state">
+          <div class="big">◈</div>
+          <div>Select an example or enter a request above</div>
+          <div class="hint">Press <kbd>Ctrl+Enter</kbd> to send</div>
+        </div>
+        <pre id="json-view" style="display:none"></pre>
+      </div>
+      <div id="tab-table" class="tab-content" role="tabpanel">
+        <div id="table-view"></div>
+      </div>
+      <div id="tab-chart" class="tab-content" role="tabpanel">
+        <canvas id="chart-canvas"></canvas>
+        <div id="chart-msg" style="color:var(--text3);text-align:center;margin-top:20px;font-size:12px;"></div>
+      </div>
+      <div id="tab-blp" class="tab-content" role="tabpanel">
+        <pre id="blp-view"></pre>
+      </div>
+      <div id="tab-excel" class="tab-content" role="tabpanel">
+        <div id="excel-view"></div>
+      </div>
+      <div id="tab-formula" class="tab-content" role="tabpanel">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--border2);">
+          <span style="color:var(--amber);font-size:11px;font-weight:700;letter-spacing:1px;font-family:var(--mono);">BLOOMBERG EXCEL FORMULA BUILDER</span>
+          <a href="/formula-builder.html" target="_blank" class="header-btn" style="text-decoration:none;">&#8599; Open standalone</a>
+        </div>
+        <div id="xlb-form">
+          <div class="xlb-row">
+            <span class="xlb-label">Security</span>
+            <input class="xlb-input" id="xlb-sec" placeholder="e.g. AAPL US Equity" oninput="xlbUpdate()">
+          </div>
+          <div class="xlb-row">
+            <span class="xlb-label">Field(s)</span>
+            <input class="xlb-input" id="xlb-field" placeholder="e.g. PX_LAST or PX_LAST,PE_RATIO" oninput="xlbUpdate()" list="xlb-field-list">
+            <datalist id="xlb-field-list"></datalist>
+          </div>
+          <div class="xlb-row">
+            <span class="xlb-label">Type</span>
+            <select class="xlb-select" id="xlb-type" onchange="xlbToggleDates();xlbUpdate()">
+              <option value="bdp">BDP — Current value</option>
+              <option value="bdh">BDH — Historical series</option>
+              <option value="bds">BDS — Bulk / array data</option>
+              <option value="bql">BQL — Operational / KPI data</option>
+            </select>
+          </div>
+          <div id="xlb-dates" style="display:none">
+            <div class="xlb-row">
+              <span class="xlb-label">Start date</span>
+              <input class="xlb-input" id="xlb-sd" type="date" oninput="xlbUpdate()">
+            </div>
+            <div class="xlb-row">
+              <span class="xlb-label">End date</span>
+              <input class="xlb-input" id="xlb-ed" type="date" oninput="xlbUpdate()" placeholder="today">
+            </div>
+            <div class="xlb-row">
+              <span class="xlb-label">Periodicity</span>
+              <select class="xlb-select" id="xlb-per" onchange="xlbUpdate()">
+                <option value="DAILY">DAILY</option>
+                <option value="WEEKLY">WEEKLY</option>
+                <option value="MONTHLY">MONTHLY</option>
+                <option value="QUARTERLY">QUARTERLY</option>
+                <option value="YEARLY">YEARLY</option>
+              </select>
+            </div>
+          </div>
+          <div id="xlb-bql-opts" style="display:none">
+            <div class="xlb-row">
+              <span class="xlb-label">Period</span>
+              <select class="xlb-select" id="xlb-fpt" onchange="xlbUpdate()">
+                <option value="Q">Q — Quarterly</option>
+                <option value="A">A — Annual</option>
+                <option value="S">S — Semi-annual</option>
+              </select>
+            </div>
+            <div class="xlb-row">
+              <span class="xlb-label">Offset</span>
+              <select class="xlb-select" id="xlb-fpo" onchange="xlbUpdate()">
+                <option value="0Q">0Q — Most recent</option>
+                <option value="-1Q">-1Q — 1 quarter ago</option>
+                <option value="-2Q">-2Q — 2 quarters ago</option>
+                <option value="-3Q">-3Q — 3 quarters ago</option>
+                <option value="0A">0A — Current fiscal year</option>
+                <option value="-1A">-1A — Last fiscal year</option>
+              </select>
+            </div>
+            <div class="xlb-row">
+              <span class="xlb-label">Mapping</span>
+              <select class="xlb-select" id="xlb-mapping" onchange="xlbUpdate()">
+                <option value="PRECISE">PRECISE — Actuals only</option>
+                <option value="INCLUSIVE">INCLUSIVE — Actuals + estimates</option>
+              </select>
+            </div>
+            <div class="xlb-row">
+              <span class="xlb-label">Fill</span>
+              <select class="xlb-select" id="xlb-xlfill" onchange="xlbUpdate()">
+                <option value="b">b — Blank if missing</option>
+                <option value="f">f — Forward fill</option>
+              </select>
+            </div>
+          </div>
+          <div class="xlb-output" id="xlb-output" onclick="xlbCopy()" title="Click to copy">=BDP("","") </div>
+          <div class="xlb-hint" id="xlb-hint"></div>
+        </div>
+        <div style="border-top:1px solid var(--border2);margin-top:14px;padding-top:10px;">
+          <div style="color:var(--text3);font-size:10px;font-family:var(--mono);margin-bottom:6px;">Click any field below to use it &nbsp;·&nbsp; <span style="color:var(--green)">API</span> = available via API &nbsp;·&nbsp; <span style="color:var(--amber)">Excel only</span> = Bloomberg Add-in only</div>
+          <input id="xlb-qref-search" class="xlb-input" placeholder="Search fields..." oninput="xlbFilterQref(this.value)" style="width:100%;max-width:340px;margin-bottom:8px;">
+          <div id="xlb-qref"></div>
+        </div>
+      </div>
+      <div id="tab-bridge" class="tab-content" role="tabpanel">
+        <!-- mode selector -->
+        <div id="bridge-modes" style="display:flex;gap:0;border-bottom:1px solid var(--border2);margin-bottom:14px;">
+          <div class="xl-tab active" id="bm-pq"  onclick="switchBridgeMode('pq')">Power Query</div>
+          <div class="xl-tab"        id="bm-vba" onclick="switchBridgeMode('vba')">VBA Macro</div>
+          <div class="xl-tab"        id="bm-tsv" onclick="switchBridgeMode('tsv')">Copy as TSV</div>
+          <div style="margin-left:auto;display:flex;align-items:center;gap:8px;padding-right:4px;">
+            <a id="bridge-csv-link" href="#" onclick="bridgeDownloadCsv();return false;"
+               style="color:var(--green);font-size:10px;font-family:var(--mono);text-decoration:none;border:1px solid var(--green);padding:2px 9px;border-radius:3px;">
+              &#8595; Download CSV
+            </a>
+          </div>
+        </div>
+        <!-- Power Query panel -->
+        <div id="bridge-pq">
+          <div style="color:var(--text3);font-size:10px;font-family:var(--mono);margin-bottom:8px;">
+            In Excel: <strong style="color:var(--text2)">Data &rsaquo; Get Data &rsaquo; From Other Sources &rsaquo; Blank Query</strong> &rsaquo; Advanced Editor &rsaquo; paste &rsaquo; Done &rsaquo; Close &amp; Load
+          </div>
+          <pre id="bridge-pq-code" class="bridge-code" onclick="bridgeCopy('pq')" title="Click to copy"></pre>
+          <div style="color:var(--text3);font-size:10px;font-family:var(--mono);margin-top:6px;">Click code to copy &nbsp;·&nbsp; Set refresh: right-click query &rsaquo; Properties &rsaquo; Refresh every N minutes</div>
+        </div>
+        <!-- VBA panel -->
+        <div id="bridge-vba" style="display:none">
+          <div style="color:var(--text3);font-size:10px;font-family:var(--mono);margin-bottom:8px;">
+            In Excel: <strong style="color:var(--text2)">Alt+F11</strong> &rsaquo; Insert &rsaquo; Module &rsaquo; paste &rsaquo; Alt+F8 &rsaquo; Run
+          </div>
+          <pre id="bridge-vba-code" class="bridge-code" onclick="bridgeCopy('vba')" title="Click to copy"></pre>
+          <div style="color:var(--text3);font-size:10px;font-family:var(--mono);margin-top:6px;">Click code to copy &nbsp;·&nbsp; Outputs to active sheet starting at A1</div>
+        </div>
+        <!-- TSV panel -->
+        <div id="bridge-tsv" style="display:none">
+          <div style="color:var(--text3);font-size:10px;font-family:var(--mono);margin-bottom:8px;">
+            Copy the data below, switch to Excel, click a cell, and press <strong style="color:var(--text2)">Ctrl+V</strong>
+          </div>
+          <div style="display:flex;gap:8px;margin-bottom:10px;">
+            <button onclick="bridgeCopy('tsv')" style="background:var(--amber);color:#000;border:none;padding:5px 14px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:11px;font-weight:700;">Copy to clipboard</button>
+            <span id="bridge-tsv-count" style="color:var(--text3);font-size:10px;font-family:var(--mono);align-self:center;"></span>
+          </div>
+          <pre id="bridge-tsv-code" class="bridge-code" style="max-height:320px;overflow:auto;"></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+  <!-- Chat panel -->
+  <div id="chat-panel">
+    <div id="chat-header">
+      <span id="chat-header-title">◈ AI ASSISTANT</span>
+      <span id="chat-header-sub">Ask me to build any API call</span>
+    </div>
+    <div id="chat-messages">
+      <div class="chat-msg assistant">
+        <div class="bubble">Hi! I can help you build Bloomberg Terminal and OpenBB API calls.
+
+Try asking:
+• <code>Get AAPL price, PE ratio and market cap</code>
+• <code>Historical EURUSD weekly for 2024</code>
+• <code>S&P 500 members list</code>
+• <code>US yield curve today</code>
+• <code>NVDA earnings history quarterly</code></div>
+      </div>
+    </div>
+    <div id="chat-typing"><span class="spinner"></span> thinking...</div>
+    <div id="chat-input-row">
+      <textarea id="chat-input" placeholder="Ask me to build an API call..." rows="1"
+        onkeydown="chatKeydown(event)" oninput="autoResize(this)"></textarea>
+      <button id="chat-send" onclick="sendChat()">↑</button>
+    </div>
+  </div>
+</div>
+
+<script src="fields.js"></script>
+<script>
+const IS_LOCAL = location.hostname === '127.0.0.1' || location.hostname === 'localhost';
+
+// ─── User-configurable settings (persisted to localStorage) ──────────────────
+const _DEFAULTS = {
+  bbg_url:      IS_LOCAL ? 'http://127.0.0.1:8195' : '',
+  openbb_url:   IS_LOCAL ? 'http://127.0.0.1:6900' : '',
+  display_name: '',
+};
+function _loadConfig() {
+  try { return { ..._DEFAULTS, ...JSON.parse(localStorage.getItem('bbg-playground-config') || '{}') }; }
+  catch { return { ..._DEFAULTS }; }
+}
+function _saveConfig(cfg) { localStorage.setItem('bbg-playground-config', JSON.stringify(cfg)); }
+let _config = _loadConfig();
+
+// When proxied (same-origin, non-localhost), use '' so requests go through the proxy.
+// When direct (localhost), use the configured upstream URLs.
+const BASES = {
+  bbg:    _config.bbg_url,
+  openbb: _config.openbb_url,
+};
+let currentApi = 'bbg';
+let BASE = BASES.bbg;
+let lastResponse = null;
+let currentExample = null;
+let sortCol = null, sortDir = 1;
+
+// ─── API switching ────────────────────────────────────────────────────────────
+function switchApi(api) {
+  currentApi = api;
+  BASE = BASES[api];
+  document.getElementById('btn-bbg').classList.toggle('active', api === 'bbg');
+  document.getElementById('btn-openbb').classList.toggle('active', api === 'openbb');
+  currentExample = null;
+  lastResponse = null;
+  params = {};
+  document.getElementById('url-input').value = '';
+  document.getElementById('params-area').innerHTML = '';
+  document.getElementById('json-view').style.display = 'none';
+  document.getElementById('empty-state').style.display = 'flex';
+  document.getElementById('response-status').textContent = '';
+  document.getElementById('response-time').textContent = '';
+  document.getElementById('copy-btn').style.display = 'none';
+  document.getElementById('search-input').value = '';
+  _sidebarTag = '';
+  buildFilterTags();
+  buildSidebar();
+  checkStatus();
+}
+
+// ─── Examples ─────────────────────────────────────────────────────────────────
+
+const BBG_EXAMPLES = [
+  // ── REFERENCE DATA (BDP) ──
+  { cat: 'Reference Data (BDP)', name: 'Quote — AAPL', desc: 'Price, bid, ask, volume',
+    endpoint: '/bdp',
+    params: { securities: 'AAPL US Equity', fields: 'PX_LAST,PX_BID,PX_ASK,PX_VOLUME,CHG_PCT_1D,MARKET_CAP' },
+    blp: `# BDP — Bloomberg Data Point\n# Terminal: AAPL US <EQUITY> DES <GO>\n\nrequest = svc.createRequest("ReferenceDataRequest")\nrequest.append("securities", "AAPL US Equity")\nfor f in ["PX_LAST","PX_BID","PX_ASK","PX_VOLUME","CHG_PCT_1D","MARKET_CAP"]:\n    request.append("fields", f)`
+  },
+  { cat: 'Reference Data (BDP)', name: 'Multi-security quotes', desc: 'SPX, EURUSD, Gold, 10Y',
+    endpoint: '/bdp',
+    params: { securities: 'SPX Index,EURUSD Curncy,GC1 Comdty,USGG10YR Index', fields: 'PX_LAST,CHG_PCT_1D,NAME' },
+    blp: `# Multi-asset BDP in one request\nsecurities = [\n    "SPX Index",\n    "EURUSD Curncy",\n    "GC1 Comdty",\n    "USGG10YR Index",\n]\nfields = ["PX_LAST", "CHG_PCT_1D", "NAME"]`
+  },
+  { cat: 'Reference Data (BDP)', name: 'Company fundamentals', desc: 'P/E, EPS, Revenue, ROE',
+    endpoint: '/bdp',
+    params: { securities: 'MSFT US Equity', fields: 'PE_RATIO,BEST_EPS,SALES_REV_TURN,RETURN_ON_EQY,EBITDA,NET_MARGIN,CURR_ENTP_VAL' },
+    blp: `# Fundamental data\nfields = [\n    "PE_RATIO",\n    "BEST_EPS",         # Consensus EPS estimate\n    "SALES_REV_TURN",   # Revenue TTM\n    "RETURN_ON_EQY",    # ROE\n    "EBITDA",\n    "NET_MARGIN",\n    "CURR_ENTP_VAL",    # Enterprise value\n]`
+  },
+  { cat: 'Reference Data (BDP)', name: 'Bond reference data', desc: 'YTM, duration, spread',
+    endpoint: '/bdp',
+    params: { securities: 'US912828Z864 Govt', fields: 'YLD_YTM_MID,DUR_MID,CONVEXITY_MID,SECURITY_DES,MATURITY,CPN,PX_MID' },
+    blp: `# Fixed income reference\n# Terminal: US912828Z864 Govt <GO>\nbond = "US912828Z864 Govt"\nfields = [\n    "YLD_YTM_MID",      # YTM mid\n    "DUR_MID",          # Modified duration\n    "CONVEXITY_MID",    # Convexity\n    "Z_SPRD_MID",       # Z-spread\n    "OAS_SPREAD_MID",   # OAS\n    "MATURITY",\n    "CPN",              # Coupon\n]`
+  },
+  { cat: 'Reference Data (BDP)', name: 'FX rates — G10', desc: 'All major currency pairs',
+    endpoint: '/bdp',
+    params: { securities: 'EURUSD Curncy,GBPUSD Curncy,USDJPY Curncy,USDCHF Curncy,AUDUSD Curncy,NZDUSD Curncy,USDCAD Curncy', fields: 'PX_LAST,PX_BID,PX_ASK,CHG_PCT_1D' },
+    blp: `# G10 FX snapshot\n# Terminal: FXC <GO> — Currency monitor\nsecurities = [\n    "EURUSD Curncy", "GBPUSD Curncy",\n    "USDJPY Curncy", "USDCHF Curncy",\n    "AUDUSD Curncy", "NZDUSD Curncy",\n    "USDCAD Curncy",\n]\nfields = ["PX_LAST","PX_BID","PX_ASK","CHG_PCT_1D"]`
+  },
+  { cat: 'Reference Data (BDP)', name: 'Analyst consensus', desc: 'Buy/hold/sell, target price',
+    endpoint: '/bdp',
+    params: { securities: 'NVDA US Equity', fields: 'BEST_TARGET_PRICE,BEST_BUY_CNT,BEST_HOLD_CNT,BEST_SELL_CNT,BEST_ANALYST_RATING,BEST_EPS,BEST_PE_RATIO' },
+    blp: `# Analyst estimates\n# Terminal: NVDA US <EQUITY> ANR <GO>\nfields = [\n    "BEST_TARGET_PRICE",\n    "BEST_BUY_CNT",\n    "BEST_HOLD_CNT",\n    "BEST_SELL_CNT",\n    "BEST_ANALYST_RATING",\n    "BEST_EPS",\n    "BEST_PE_RATIO",\n]`
+  },
+
+  // ── HISTORICAL DATA (BDH) ──
+  { cat: 'Historical Data (BDH)', name: 'AAPL daily OHLCV', desc: 'Last 6 months',
+    endpoint: '/bdh',
+    params: { securities: 'AAPL US Equity', fields: 'PX_OPEN,PX_HIGH,PX_LOW,PX_LAST,PX_VOLUME', start_date: '2024-07-01', periodicity: 'DAILY' },
+    chart: { xKey: 'date', yKey: 'PX_LAST', label: 'AAPL' },
+    blp: `# BDH — Bloomberg Data History\nrequest = svc.createRequest("HistoricalDataRequest")\nrequest.append("securities", "AAPL US Equity")\nfor f in ["PX_OPEN","PX_HIGH","PX_LOW","PX_LAST","PX_VOLUME"]:\n    request.append("fields", f)\nrequest.set("startDate", "20240701")\nrequest.set("periodicitySelection", "DAILY")`
+  },
+  { cat: 'Historical Data (BDH)', name: 'SPX monthly returns', desc: '5-year monthly close',
+    endpoint: '/bdh',
+    params: { securities: 'SPX Index', fields: 'PX_LAST,TOT_RETURN_INDEX_GROSS_DVDS', start_date: '2020-01-01', periodicity: 'MONTHLY' },
+    chart: { xKey: 'date', yKey: 'PX_LAST', label: 'S&P 500' },
+    blp: `# Monthly total return\nrequest.append("securities", "SPX Index")\nrequest.append("fields", "TOT_RETURN_INDEX_GROSS_DVDS")\nrequest.set("startDate", "20200101")\nrequest.set("periodicitySelection", "MONTHLY")`
+  },
+  { cat: 'Historical Data (BDH)', name: 'US 10Y yield history', desc: 'Daily 10Y Treasury yield',
+    endpoint: '/bdh',
+    params: { securities: 'USGG10YR Index', fields: 'PX_LAST', start_date: '2022-01-01', periodicity: 'DAILY' },
+    chart: { xKey: 'date', yKey: 'PX_LAST', label: 'US 10Y Yield' }
+  },
+  { cat: 'Historical Data (BDH)', name: 'Multi-asset history', desc: 'SPX, Gold, USD, Oil',
+    endpoint: '/bdh',
+    params: { securities: 'SPX Index,GC1 Comdty,DXY Curncy,CL1 Comdty', fields: 'PX_LAST', start_date: '2024-01-01', periodicity: 'WEEKLY' },
+    blp: `# Multi-security BDH\nsecurities = ["SPX Index","GC1 Comdty","DXY Curncy","CL1 Comdty"]\nrequest.set("periodicitySelection", "WEEKLY")\n# Returns dict keyed by security`
+  },
+  { cat: 'Historical Data (BDH)', name: 'EPS history — TSLA', desc: 'Quarterly earnings history',
+    endpoint: '/bdh',
+    params: { securities: 'TSLA US Equity', fields: 'IS_EPS,IS_EPS_EST_DES,SALES_REV_TURN', start_date: '2020-01-01', periodicity: 'QUARTERLY' },
+    blp: `# Quarterly financials\nrequest.set("periodicitySelection", "QUARTERLY")\nfields = [\n    "IS_EPS",           # Reported EPS\n    "SALES_REV_TURN",   # Revenue\n]`
+  },
+
+  // ── BULK DATA (BDS) ──
+  { cat: 'Bulk Data (BDS)', name: 'S&P 500 members', desc: 'All index constituents',
+    endpoint: '/bds',
+    params: { security: 'SPX Index', field: 'INDX_MEMBERS' },
+    blp: `# BDS — index members\n# Terminal: SPX Index MEMBERS\nrequest.append("securities", "SPX Index")\nrequest.append("fields", "INDX_MEMBERS")\n# Returns: security name + weight for each member`
+  },
+  { cat: 'Bulk Data (BDS)', name: 'AAPL dividend history', desc: 'All historical dividends',
+    endpoint: '/bds',
+    params: { security: 'AAPL US Equity', field: 'DVD_HIST_ALL' },
+    blp: `# BDS — dividend history\nrequest.append("fields", "DVD_HIST_ALL")\n# Returns: ex_date, record_date, pay_date, amount, type`
+  },
+  { cat: 'Bulk Data (BDS)', name: 'MSFT earnings calendar', desc: 'Past and future earnings',
+    endpoint: '/bds',
+    params: { security: 'MSFT US Equity', field: 'EARN_ANN_DT_AND_EPS' },
+    blp: `# BDS — earnings dates\nrequest.append("fields", "EARN_ANN_DT_AND_EPS")\n# Returns: announcement_date, eps_actual, eps_estimate, period`
+  },
+  { cat: 'Bulk Data (BDS)', name: 'AAPL options expirations', desc: 'Options expiry dates',
+    endpoint: '/bds',
+    params: { security: 'AAPL US Equity', field: 'OPT_EXPIRE_DT' },
+    blp: `# BDS — options expiry dates\nrequest.append("fields", "OPT_EXPIRE_DT")\n# Then use each date in BDP for chain data`
+  },
+  { cat: 'Bulk Data (BDS)', name: 'Board of directors', desc: 'Company board members',
+    endpoint: '/bds',
+    params: { security: 'JPM US Equity', field: 'BOARD_OF_DIRECTORS' },
+    blp: `# BDS — corporate governance\nrequest.append("fields", "BOARD_OF_DIRECTORS")\n# Returns: name, title, joined_date, independence_status`
+  },
+
+  // ── INTRADAY ──
+  { cat: 'Intraday', name: '5-min bars — AAPL', desc: 'Today\'s intraday bars',
+    endpoint: '/intraday/bars',
+    params: { security: 'AAPL US Equity', event_type: 'TRADE', interval: '5', start_datetime: new Date(new Date().setHours(9,30,0,0)).toISOString().slice(0,19), end_datetime: new Date(new Date().setHours(16,0,0,0)).toISOString().slice(0,19) },
+    chart: { xKey: 'time', yKey: 'close', label: 'AAPL 5min' },
+    blp: `# Intraday bars\nrequest = svc.createRequest("IntradayBarRequest")\nrequest.set("security", "AAPL US Equity")\nrequest.set("eventType", "TRADE")\nrequest.set("interval", 5)   # minutes\nrequest.set("startDateTime", "2025-01-15T09:30:00")\nrequest.set("endDateTime", "2025-01-15T16:00:00")`
+  },
+  { cat: 'Intraday', name: '1-min bars — EURUSD', desc: '1-minute FX bars',
+    endpoint: '/intraday/bars',
+    params: { security: 'EURUSD Curncy', event_type: 'BID', interval: '1', start_datetime: new Date(new Date().setHours(9,0,0,0)).toISOString().slice(0,19), end_datetime: new Date(new Date().setHours(17,0,0,0)).toISOString().slice(0,19) },
+    chart: { xKey: 'time', yKey: 'close', label: 'EURUSD 1min' }
+  },
+  { cat: 'Intraday', name: 'Tick data — SPY', desc: 'Raw trade ticks',
+    endpoint: '/intraday/ticks',
+    params: { security: 'SPY US Equity', event_types: 'TRADE,BID,ASK', start_datetime: new Date(new Date().setHours(9,30,0,0)).toISOString().slice(0,19), end_datetime: new Date(new Date().setHours(9,31,0,0)).toISOString().slice(0,19), max_ticks: '200' },
+    blp: `# Tick data\nrequest = svc.createRequest("IntradayTickRequest")\nrequest.set("security", "SPY US Equity")\nrequest.append("eventTypes", "TRADE")\nrequest.append("eventTypes", "BID")\nrequest.append("eventTypes", "ASK")\nrequest.set("includeConditionCodes", True)`
+  },
+
+  // ── FIELD CATALOG ──
+  { cat: 'Field Catalog', name: 'Search fields: "earnings"', desc: 'Find fields by keyword',
+    endpoint: '/fields/search',
+    params: { query: 'earnings per share' },
+    blp: `# Field search — like FLDS <GO>\nrequest = svc.createRequest("FieldSearchRequest")\nrequest.set("searchSpec", "earnings per share")\nrequest.getElement("include").setElement("fieldType", "All")`
+  },
+  { cat: 'Field Catalog', name: 'Field info: PX_LAST', desc: 'Metadata and documentation',
+    endpoint: '/fields/info',
+    params: { fields: 'PX_LAST,PX_BID,PX_ASK,MARKET_CAP,PE_RATIO' }
+  },
+  { cat: 'Field Catalog', name: 'Search fields: "volatility"', desc: 'Vol and options fields',
+    endpoint: '/fields/search',
+    params: { query: 'implied volatility options' }
+  },
+
+  // ── YIELD CURVES ──
+  { cat: 'Yield Curves', name: 'USD Yield Curve', desc: 'US Treasury sovereign curve',
+    endpoint: '/curve', params: { curve_id: 'USD' },
+    blp: `# USD yield curve — sovereign rates\nsecurities = ["USGG1M Index","USGG3M Index","USGG6M Index","USGG1YR Index",\n              "USGG2YR Index","USGG5YR Index","USGG10YR Index","USGG30YR Index"]\nfields = ["PX_LAST","SECURITY_DES"]`
+  },
+  { cat: 'Yield Curves', name: 'EUR Yield Curve', desc: 'German Bund sovereign curve', endpoint: '/curve', params: { curve_id: 'EUR' } },
+  { cat: 'Yield Curves', name: 'GBP Yield Curve', desc: 'UK Gilt sovereign curve', endpoint: '/curve', params: { curve_id: 'GBP' } },
+  { cat: 'Yield Curves', name: 'JPY Yield Curve', desc: 'JGB sovereign curve', endpoint: '/curve', params: { curve_id: 'JPY' } },
+  { cat: 'Yield Curves', name: 'USD Curve — historical',
+    endpoint: '/curve', params: { curve_id: 'USD', date: '2022-03-16' }, desc: 'Fed hike day curve shape' },
+
+  // ── BQL ──
+  { cat: 'BQL', name: 'TSLA deliveries (latest Q)', desc: 'Vehicle deliveries most recent quarter',
+    endpoint: '/bql',
+    params: { query: "get(NUMBER_OF_VEHICLES_SOLD(FPT=Q,FPO=0Q,ACT_EST_MAPPING=PRECISE,FS=MRC)) for(['TSLA US Equity'])" },
+    blp: `# BQL via //blp/bql service\nsession = _get_session()\nsvc = session.openService("//blp/bql")\nreq = svc.createRequest("sendQuery")\nreq.set("expression",\n  "get(NUMBER_OF_VEHICLES_SOLD(FPT=Q,FPO=0Q,ACT_EST_MAPPING=PRECISE,FS=MRC))"\n  " for(['TSLA US Equity'])"\n)`
+  },
+  { cat: 'BQL', name: 'TSLA deliveries (4 quarters)', desc: 'Last 4 quarters of deliveries',
+    endpoint: '/bql',
+    params: { query: "get(NUMBER_OF_VEHICLES_SOLD(FPT=Q,FPO=range(-3Q,0Q),ACT_EST_MAPPING=PRECISE,FS=MRC)) for(['TSLA US Equity'])" }
+  },
+  { cat: 'BQL', name: 'Netflix subscribers', desc: 'Paid streaming subscribers latest Q',
+    endpoint: '/bql',
+    params: { query: "get(PAID_SUBSCRIBERS(FPT=Q,FPO=0Q,ACT_EST_MAPPING=PRECISE,FS=MRC)) for(['NFLX US Equity'])" }
+  },
+  { cat: 'BQL', name: 'Apple iPhone units', desc: 'iPhone units sold latest quarter',
+    endpoint: '/bql',
+    params: { query: "get(UNIT_SALES_IPHONE(FPT=Q,FPO=0Q,ACT_EST_MAPPING=PRECISE,FS=MRC)) for(['AAPL US Equity'])" }
+  },
+  { cat: 'BQL', name: 'BEst EPS — AAPL', desc: 'Bloomberg consensus EPS estimate',
+    endpoint: '/bql',
+    params: { query: "get(IS_EPS_DILUTED(FPT=Q,FPO=0Q,ACT_EST_MAPPING=INCLUSIVE)) for(['AAPL US Equity'])" }
+  },
+  { cat: 'BQL', name: 'Multi-ticker KPI', desc: 'Compare deliveries across EV makers',
+    endpoint: '/bql',
+    params: { query: "get(NUMBER_OF_VEHICLES_SOLD(FPT=Q,FPO=0Q,ACT_EST_MAPPING=PRECISE,FS=MRC)) for(['TSLA US Equity','NIO US Equity','RIVN US Equity'])" }
+  },
+  { cat: 'BQL', name: 'Revenue — quarterly history', desc: '4 quarters of revenue via BQL',
+    endpoint: '/bql',
+    params: { query: "get(SALES_REV_TURN(FPT=Q,FPO=range(-3Q,0Q),ACT_EST_MAPPING=PRECISE)) for(['AAPL US Equity'])" }
+  },
+  { cat: 'BQL', name: 'Same-store sales growth', desc: 'Comparable sales growth latest Q',
+    endpoint: '/bql',
+    params: { query: "get(SAME_STORE_SALES_GROWTH(FPT=Q,FPO=0Q,ACT_EST_MAPPING=PRECISE,FS=MRC)) for(['MCD US Equity'])" }
+  },
+
+  // ── BDP — OVERRIDES ──
+  { cat: 'Reference Data (BDP)', name: 'BDP with override', desc: 'Reference date override',
+    endpoint: '/bdp', params: { securities: 'USGG10YR Index', fields: 'PX_LAST', overrides: 'REFERENCE_DATE=20230101' },
+    blp: `# BDP with override\nrequest.set("overrides", [{"fieldId": "REFERENCE_DATE", "value": "20230101"}])`
+  },
+  { cat: 'Reference Data (BDP)', name: 'Dividend yield override', desc: 'Yield calc basis override',
+    endpoint: '/bdp', params: { securities: 'AAPL US Equity', fields: 'DVD_YIELD', overrides: 'DVD_YIELD_TYP=INDICATED' } },
+
+  // ── SECURITY LOOKUP ──
+  { cat: 'Security Lookup', name: 'Search: "Apple"', desc: 'Find securities by name',
+    endpoint: '/security/lookup',
+    params: { query: 'Apple', max_results: '10', yellow_key_filter: 'Equity' },
+    blp: `# Security lookup — like SECF <GO>\nrequest = svc.createRequest("instrumentListRequest")\nrequest.set("query", "Apple")\nrequest.set("maxResults", 10)\nrequest.set("yellowKeyFilter", "YK_FILTER_EQUITY")`
+  },
+  { cat: 'Security Lookup', name: 'Search: "US Treasury"', desc: 'Find government bonds',
+    endpoint: '/security/lookup',
+    params: { query: 'US Treasury 10 year', max_results: '10', yellow_key_filter: 'Govt' }
+  },
+  { cat: 'Security Lookup', name: 'Search: "Brent crude"', desc: 'Find commodity futures',
+    endpoint: '/security/lookup',
+    params: { query: 'Brent crude oil', max_results: '10', yellow_key_filter: 'Comdty' }
+  },
+];
+
+const EXAMPLES = [
+  // ── EQUITIES ──
+  { cat: 'Equities', name: 'Historical Price (AAPL)', desc: 'Daily OHLCV for Apple',
+    endpoint: '/api/v1/equity/price/historical',
+    params: { symbol: 'AAPL', start_date: '2024-01-01', end_date: '2024-12-31', provider: 'yfinance' },
+    blp: `import blpapi\n\n# Bloomberg Terminal: Historical Data\n# BDP / BDH / BDS functions\n\nservice = "//blp/refdata"\nsecurity = "AAPL US Equity"\nfields = ["PX_LAST", "PX_OPEN", "PX_HIGH", "PX_LOW", "PX_VOLUME"]\n\n# Using BLPAPI directly\nrequest = service.createRequest("HistoricalDataRequest")\nrequest.append("securities", security)\nfor f in fields:\n    request.append("fields", f)\nrequest.set("startDate", "20240101")\nrequest.set("endDate", "20241231")\nrequest.set("periodicitySelection", "DAILY")\n\n# Bloomberg Terminal formula (Excel)\n# =BDH("AAPL US Equity","PX_LAST","1/1/2024","12/31/2024")`,
+    chart: { xKey: 'date', yKey: 'close', label: 'AAPL Close Price' }
+  },
+  { cat: 'Equities', name: 'Real-time Quote (MSFT)', desc: 'Latest bid/ask/last',
+    endpoint: '/api/v1/equity/price/quote',
+    params: { symbol: 'MSFT', provider: 'yfinance' },
+    blp: `import blpapi\n\n# Bloomberg: Real-time quote\n# Field mnemonics: PX_LAST, BID, ASK, VOLUME\n\nservice = "//blp/refdata"\nrequest = service.createRequest("ReferenceDataRequest")\nrequest.append("securities", "MSFT US Equity")\nfor f in ["PX_LAST", "BID", "ASK", "PX_VOLUME", "CHG_PCT_1D"]:\n    request.append("fields", f)\n\n# Terminal shortcut: MSFT US Equity <EQUITY> DES`
+  },
+  { cat: 'Equities', name: 'Company Profile (TSLA)', desc: 'Business description & metadata',
+    endpoint: '/api/v1/equity/profile',
+    params: { symbol: 'TSLA', provider: 'yfinance' },
+    blp: `# Bloomberg: Company profile fields\nsecurity = "TSLA US Equity"\nfields = [\n    "COMPANY_NAME",\n    "GICS_SECTOR_NAME",\n    "GICS_INDUSTRY_NAME",\n    "CIE_DES",          # Company description\n    "CEO_NAME",\n    "EMPLOYEE_CNT",\n    "MARKET_CAP",\n    "COUNTRY_ISO",\n]\n# Terminal: TSLA US <EQUITY> DES <GO>`
+  },
+  { cat: 'Equities', name: 'Earnings Calendar', desc: 'Upcoming earnings dates',
+    endpoint: '/api/v1/equity/calendar/earnings',
+    params: { start_date: '2025-01-01', end_date: '2025-03-31', provider: 'fmp' },
+    blp: `# Bloomberg: Earnings calendar\n# Terminal: EVTS <GO> — Event calendar\n# or: ERN <GO> — Earnings calendar\n\nfields = [\n    "ANNOUNCEMENT_DT",\n    "IS_EPS",           # Reported EPS\n    "IS_EPS_EST_DES",   # EPS estimate description\n    "BEST_EPS",         # Consensus EPS estimate\n]`
+  },
+  { cat: 'Equities', name: 'Price Performance', desc: 'Relative performance periods',
+    endpoint: '/api/v1/equity/price/performance',
+    params: { symbol: 'NVDA', provider: 'fmp' },
+    blp: `# Bloomberg: Return attribution\n# Terminal: NVDA US <EQUITY> GP <GO>\nfields = [\n    "DAY_TO_DAY_TOT_RETURN_GROSS_DVDS",\n    "TOT_RETURN_INDEX_GROSS_DVDS",\n    "RETURN_1D", "RETURN_1W",\n    "RETURN_1M", "RETURN_3M",\n    "RETURN_6M", "RETURN_1YR",\n    "RETURN_YTD",\n]`
+  },
+  { cat: 'Equities', name: 'Historical Mkt Cap', desc: 'Market cap over time',
+    endpoint: '/api/v1/equity/historical_market_cap',
+    params: { symbol: 'AMZN', start_date: '2020-01-01', provider: 'fmp' },
+    chart: { xKey: 'date', yKey: 'market_cap', label: 'AMZN Market Cap' }
+  },
+  { cat: 'Equities', name: 'Gainers (Today)', desc: 'Top gaining stocks',
+    endpoint: '/api/v1/equity/discovery/gainers',
+    params: { sort: 'desc', provider: 'yfinance' }
+  },
+  { cat: 'Equities', name: 'Losers (Today)', desc: 'Top losing stocks',
+    endpoint: '/api/v1/equity/discovery/losers',
+    params: { sort: 'desc', provider: 'yfinance' }
+  },
+  { cat: 'Equities', name: 'Stock Screener', desc: 'Screen by criteria',
+    endpoint: '/api/v1/equity/screener',
+    params: { mkt_cap_min: '100000000000', beta_max: '1.5', provider: 'fmp' }
+  },
+  { cat: 'Equities', name: 'Peer Comparison', desc: 'Comparable companies',
+    endpoint: '/api/v1/equity/compare/peers',
+    params: { symbol: 'AAPL', provider: 'fmp' }
+  },
+
+  // ── FUNDAMENTALS ──
+  { cat: 'Fundamentals', name: 'Income Statement (AAPL)', desc: 'Annual P&L',
+    endpoint: '/api/v1/equity/fundamental/income',
+    params: { symbol: 'AAPL', period: 'annual', limit: '5', provider: 'fmp' },
+    blp: `# Bloomberg: Financials\n# Terminal: AAPL US <EQUITY> FA <GO>\n\nfields = [\n    "IS_INC_BEF_XO_ITEM",  # Net income\n    "SALES_REV_TURN",       # Revenue\n    "IS_OPER_INC",          # Operating income\n    "IS_GROSS_PROFIT",      # Gross profit\n    "IS_EPS_DILUTED",       # Diluted EPS\n    "IS_DILUTED_SHARES_OUT",# Diluted shares\n]\nrequest.set("periodicitySelection", "ANNUAL")`
+  },
+  { cat: 'Fundamentals', name: 'Balance Sheet (MSFT)', desc: 'Assets & liabilities',
+    endpoint: '/api/v1/equity/fundamental/balance',
+    params: { symbol: 'MSFT', period: 'annual', limit: '5', provider: 'fmp' },
+    blp: `# Bloomberg: Balance sheet\nfields = [\n    "BS_TOT_ASSET",         # Total assets\n    "BS_TOT_LIAB2",         # Total liabilities\n    "TOT_EQUITY",           # Total equity\n    "BS_CASH_NEAR_CASH_ITEM",# Cash & equivalents\n    "BS_LONG_TERM_BORROW",  # Long-term debt\n    "CURRENT_RATIO",\n    "DEBT_TO_EQUITY_FUND",\n]`
+  },
+  { cat: 'Fundamentals', name: 'Cash Flow (GOOGL)', desc: 'Operating / investing / financing',
+    endpoint: '/api/v1/equity/fundamental/cash',
+    params: { symbol: 'GOOGL', period: 'annual', limit: '5', provider: 'fmp' },
+    blp: `# Bloomberg: Cash flow statement\nfields = [\n    "CF_CASH_FROM_OPER",    # Operating CF\n    "CF_CAP_EXPEND_PRPTY",  # CapEx\n    "FREE_CASH_FLOW",       # Free cash flow\n    "CF_CASH_FROM_INV_ACT", # Investing CF\n    "CF_CASH_FROM_FNC_ACT", # Financing CF\n    "CF_DIV_PAID",          # Dividends paid\n]`
+  },
+  { cat: 'Fundamentals', name: 'Key Metrics (META)', desc: 'Valuation & efficiency ratios',
+    endpoint: '/api/v1/equity/fundamental/metrics',
+    params: { symbol: 'META', period: 'annual', limit: '5', provider: 'fmp' }
+  },
+  { cat: 'Fundamentals', name: 'Financial Ratios', desc: 'P/E, P/B, ROE, ROA etc.',
+    endpoint: '/api/v1/equity/fundamental/ratios',
+    params: { symbol: 'JPM', period: 'annual', limit: '5', provider: 'fmp' },
+    blp: `# Bloomberg: Valuation multiples\nfields = [\n    "PE_RATIO",             # P/E ratio\n    "PX_TO_BOOK_RATIO",     # P/B ratio\n    "RETURN_ON_EQY",        # ROE\n    "RETURN_ON_ASSET",      # ROA\n    "EBITDA_MARGIN",        # EBITDA margin\n    "NET_MARGIN",           # Net margin\n    "TRAIL_12M_EV_TO_SALES",# EV/Sales\n    "CURRENT_EV_TO_EBITDA", # EV/EBITDA\n]`
+  },
+  { cat: 'Fundamentals', name: 'EPS Estimates (NVDA)', desc: 'Analyst EPS consensus',
+    endpoint: '/api/v1/equity/estimates/forward_eps',
+    params: { symbol: 'NVDA', provider: 'intrinio' }
+  },
+  { cat: 'Fundamentals', name: 'Price Targets', desc: 'Analyst price target consensus',
+    endpoint: '/api/v1/equity/estimates/price_target',
+    params: { symbol: 'AAPL', provider: 'fmp' },
+    blp: `# Bloomberg: Analyst estimates\n# Terminal: AAPL US <EQUITY> ANR <GO>\nfields = [\n    "BEST_TARGET_PRICE",    # Consensus target\n    "BEST_BUY_CNT",         # Buy ratings\n    "BEST_HOLD_CNT",        # Hold ratings  \n    "BEST_SELL_CNT",        # Sell ratings\n    "BEST_ANALYST_RATING",  # Consensus rating\n]`
+  },
+  { cat: 'Fundamentals', name: 'Insider Trades', desc: 'Form 4 insider transactions',
+    endpoint: '/api/v1/equity/ownership/insider_trading',
+    params: { symbol: 'TSLA', provider: 'fmp' }
+  },
+  { cat: 'Fundamentals', name: 'Institutional Ownership', desc: '13F filer holdings',
+    endpoint: '/api/v1/equity/ownership/institutional',
+    params: { symbol: 'AAPL', provider: 'fmp' }
+  },
+
+  // ── FIXED INCOME ──
+  { cat: 'Fixed Income', name: 'Treasury Yield Curve', desc: 'Current US yield curve',
+    endpoint: '/api/v1/fixedincome/government/yield_curve',
+    params: { date: '2025-01-15', provider: 'fred' },
+    blp: `# Bloomberg: Yield curve\n# Terminal: YCRV <GO> — Yield curve monitor\n# or: GC <GO> — Generic rates\n\nsecurities = [\n    "USGG1M Index",  # 1-month\n    "USGG3M Index",  # 3-month\n    "USGG6M Index",  # 6-month\n    "USGG2YR Index", # 2-year\n    "USGG5YR Index", # 5-year\n    "USGG10YR Index",# 10-year\n    "USGG30YR Index",# 30-year\n]\nfields = ["PX_LAST", "YLD_YTM_MID"]`
+  },
+  { cat: 'Fixed Income', name: 'Treasury Rates', desc: 'FRED benchmark rates',
+    endpoint: '/api/v1/fixedincome/government/treasury_rates',
+    params: { start_date: '2024-01-01', provider: 'federal_reserve' },
+    chart: { xKey: 'date', yKey: 'week_4', label: '4-Week T-Bill Yield' }
+  },
+  { cat: 'Fixed Income', name: 'SOFR Rate', desc: 'Secured Overnight Financing Rate',
+    endpoint: '/api/v1/fixedincome/rate/sofr',
+    params: { start_date: '2024-01-01', provider: 'fred' },
+    chart: { xKey: 'date', yKey: 'rate', label: 'SOFR' },
+    blp: `# Bloomberg: Money market rates\n# Terminal: BTMM <GO> — Treasury & money market\n\nsecurities = [\n    "SOFRRATE Index",  # SOFR\n    "FEDL01 Index",    # Fed Funds effective\n    "USOSFR1 Curncy", # SOFR 1Y swap\n]\nfields = ["PX_LAST", "CHG_NET_1D"]`
+  },
+  { cat: 'Fixed Income', name: 'EFFR Rate', desc: 'Effective Federal Funds Rate',
+    endpoint: '/api/v1/fixedincome/rate/effr',
+    params: { start_date: '2022-01-01', provider: 'fred' },
+    chart: { xKey: 'date', yKey: 'rate', label: 'EFFR' }
+  },
+  { cat: 'Fixed Income', name: 'Corporate Bond Prices', desc: 'Investment grade bonds',
+    endpoint: '/api/v1/fixedincome/corporate/bond_prices',
+    params: { provider: 'government_us' },
+    blp: `# Bloomberg: Corporate bonds\n# Terminal: SRCH <GO> — Bond search\n\nsecurity = "AAPL 3.85 05/04/43 Corp"\nfields = [\n    "YLD_YTM_MID",     # YTM\n    "DUR_MID",          # Duration\n    "CONVEXITY_MID",    # Convexity\n    "Z_SPRD_MID",       # Z-spread\n    "OAS_SPREAD_MID",   # OAS\n    "PX_MID",           # Mid price\n]`
+  },
+  { cat: 'Fixed Income', name: 'TIPS Yields', desc: 'Inflation-protected securities',
+    endpoint: '/api/v1/fixedincome/government/tips_yields',
+    params: { start_date: '2024-01-01', provider: 'fred' }
+  },
+  { cat: 'Fixed Income', name: 'Treasury Spreads (TCM)', desc: 'Constant maturity spreads',
+    endpoint: '/api/v1/fixedincome/spreads/tcm',
+    params: { start_date: '2024-01-01', provider: 'fred' }
+  },
+  { cat: 'Fixed Income', name: 'Svensson Yield Curve', desc: 'Model-fitted yield curve',
+    endpoint: '/api/v1/fixedincome/government/svensson_yield_curve',
+    params: { start_date: '2024-01-01', provider: 'federal_reserve' }
+  },
+
+  // ── FX & CRYPTO ──
+  { cat: 'FX & Crypto', name: 'FX Historical (EURUSD)', desc: 'EUR/USD daily OHLCV',
+    endpoint: '/api/v1/currency/price/historical',
+    params: { symbol: 'EURUSD', start_date: '2024-01-01', provider: 'fmp' },
+    blp: `# Bloomberg: FX rates\n# Terminal: FXIP <GO> — FX information portal\n\nsecurities = [\n    "EURUSD Curncy",\n    "GBPUSD Curncy",\n    "USDJPY Curncy",\n    "USDCNY Curncy",\n    "AUDUSD Curncy",\n]\nfields = [\n    "PX_LAST", "PX_BID", "PX_ASK",\n    "TOT_RETURN_INDEX_GROSS_DVDS",\n    "CHG_PCT_1D", "HIGH_52WEEK", "LOW_52WEEK",\n]`,
+    chart: { xKey: 'date', yKey: 'close', label: 'EURUSD' }
+  },
+  { cat: 'FX & Crypto', name: 'FX Snapshots', desc: 'Multi-currency spot rates',
+    endpoint: '/api/v1/currency/snapshots',
+    params: { base: 'USD', provider: 'fmp' }
+  },
+  { cat: 'FX & Crypto', name: 'FX Reference Rates (ECB)', desc: 'European Central Bank daily rates',
+    endpoint: '/api/v1/currency/reference_rates',
+    params: { provider: 'ecb' }
+  },
+  { cat: 'FX & Crypto', name: 'Bitcoin Historical', desc: 'BTC/USD daily prices',
+    endpoint: '/api/v1/crypto/price/historical',
+    params: { symbol: 'BTCUSD', start_date: '2024-01-01', provider: 'yfinance' },
+    chart: { xKey: 'date', yKey: 'close', label: 'BTC/USD' }
+  },
+  { cat: 'FX & Crypto', name: 'Ethereum Historical', desc: 'ETH/USD daily prices',
+    endpoint: '/api/v1/crypto/price/historical',
+    params: { symbol: 'ETHUSD', start_date: '2024-01-01', provider: 'yfinance' },
+    chart: { xKey: 'date', yKey: 'close', label: 'ETH/USD' }
+  },
+
+  // ── MACRO & ECONOMY ──
+  { cat: 'Macro', name: 'US GDP (Real)', desc: 'Real GDP growth rates',
+    endpoint: '/api/v1/economy/gdp/real',
+    params: { units: 'yoy', start_date: '2010-01-01', provider: 'oecd' },
+    blp: `# Bloomberg: Macroeconomic data\n# Terminal: ECOW <GO> — Economic calendar\n# or: WECO <GO> — World economic monitor\n\n# GDP indicators\nsecurities = [\n    "GDP CUR$ Index",    # US Nominal GDP\n    "GDPC1 Index",       # Real GDP (FRED)\n    "EHGDUS Index",      # Bloomberg GDP forecast\n]\nfields = [\n    "PX_LAST",\n    "ACTUAL_RELEASE",\n    "BN_SURVEY_MEDIAN",  # Survey consensus\n]`,
+    chart: { xKey: 'date', yKey: 'value', label: 'Real GDP YoY' }
+  },
+  { cat: 'Macro', name: 'CPI Inflation', desc: 'Consumer price inflation',
+    endpoint: '/api/v1/economy/cpi',
+    params: { countries: 'united_states', start_date: '2015-01-01', frequency: 'monthly', provider: 'fred' },
+    blp: `# Bloomberg: CPI data\n# Terminal: CPIYOY Index <GO>\n\nsecurities = [\n    "CPI INDX Index",    # US CPI All Items\n    "CPUPAXFE Index",    # CPI ex Food & Energy\n    "CPURNSA Index",     # CPI not seasonally adj\n    "CPUPXCHG Index",    # CPI MoM change\n]\nfields = ["PX_LAST", "ACTUAL_RELEASE", "BN_SURVEY_MEDIAN"]`,
+    chart: { xKey: 'date', yKey: 'value', label: 'CPI' }
+  },
+  { cat: 'Macro', name: 'Interest Rates (Global)', desc: 'Central bank policy rates',
+    endpoint: '/api/v1/economy/interest_rates',
+    params: { provider: 'oecd' },
+    blp: `# Bloomberg: Central bank rates\nsecurities = [\n    "FDTR Index",        # Fed Funds target\n    "EURR002W Index",    # ECB deposit rate\n    "UKBRBASE Index",    # BoE bank rate\n    "BOJDPBAL Index",    # BoJ policy rate\n]`
+  },
+  { cat: 'Macro', name: 'Economic Calendar', desc: 'Upcoming macro events',
+    endpoint: '/api/v1/economy/calendar',
+    params: { start_date: '2025-01-01', end_date: '2025-01-31', provider: 'fmp' },
+    blp: `# Bloomberg: Economic events\n# Terminal: ECO <GO> — Economic calendar\n# or: EVTS <GO> — Event calendar\n\nfields = [\n    "ECO_RELEASE_DT",\n    "ECO_RELEASE_TIME",\n    "ACTUAL_RELEASE",\n    "BN_SURVEY_MEDIAN",\n    "BN_SURVEY_PRIOR",\n    "ECO_REVISIONS",\n]`
+  },
+  { cat: 'Macro', name: 'FOMC Documents', desc: 'Fed meeting minutes & statements',
+    endpoint: '/api/v1/economy/fomc_documents',
+    params: { provider: 'federal_reserve' }
+  },
+  { cat: 'Macro', name: 'Money Supply (M2)', desc: 'Monetary aggregates',
+    endpoint: '/api/v1/economy/money_measures',
+    params: { start_date: '2020-01-01', provider: 'fred' }
+  },
+  { cat: 'Macro', name: 'PCE Inflation', desc: 'Personal consumption expenditures',
+    endpoint: '/api/v1/economy/pce',
+    params: { date: '2024-12-01', provider: 'fred' }
+  },
+  { cat: 'Macro', name: 'Nonfarm Payrolls', desc: 'BLS employment data',
+    endpoint: '/api/v1/economy/survey/nonfarm_payrolls',
+    params: { start_date: '2020-01-01', provider: 'fred' },
+    chart: { xKey: 'date', yKey: 'value', label: 'Nonfarm Payrolls' }
+  },
+  { cat: 'Macro', name: 'Univ. of Michigan Sentiment', desc: 'Consumer confidence survey',
+    endpoint: '/api/v1/economy/survey/university_of_michigan',
+    params: { start_date: '2020-01-01', provider: 'fred' }
+  },
+
+  // ── OPTIONS ──
+  { cat: 'Options', name: 'Options Chain (AAPL)', desc: 'Full options chain',
+    endpoint: '/api/v1/derivatives/options/chains',
+    params: { symbol: 'AAPL', provider: 'cboe' },
+    blp: `# Bloomberg: Options\n# Terminal: OMON <GO> — Options monitor\n# or: OVDV <GO> — Volatility surface\n\n# Options chain for AAPL\nfields = [\n    "OPT_STRIKE_PX",         # Strike price\n    "OPT_EXPIRE_DT",         # Expiry date\n    "OPT_PUT_CALL",          # Put or Call\n    "PX_MID",                # Mid price\n    "OPT_IMPLIED_VOLATILITY_BSM", # IV\n    "OPT_DELTA",             # Delta\n    "OPT_GAMMA",             # Gamma\n    "OPT_THETA",             # Theta\n    "OPT_VEGA",              # Vega\n    "OPT_OPEN_INT",          # Open interest\n]`
+  },
+  { cat: 'Options', name: 'Volatility Surface', desc: 'Implied vol by strike/expiry',
+    endpoint: '/api/v1/derivatives/options/surface',
+    params: { symbol: 'SPY', provider: 'cboe' }
+  },
+  { cat: 'Options', name: 'Unusual Options Activity', desc: 'High volume option trades',
+    endpoint: '/api/v1/derivatives/options/unusual',
+    params: { provider: 'intrinio' }
+  },
+  { cat: 'Options', name: 'Futures Curve (Oil)', desc: 'Crude oil futures term structure',
+    endpoint: '/api/v1/derivatives/futures/curve',
+    params: { symbol: 'CL', provider: 'yfinance' },
+    blp: `# Bloomberg: Futures\n# Terminal: WCL <GO> — Generic front month CL\n# or: COMS <GO> — Commodity screen\n\nsecurities = [\n    "CLF5 Comdty",  # Jan 2025\n    "CLG5 Comdty",  # Feb 2025\n    "CLH5 Comdty",  # Mar 2025\n]\nfields = ["PX_LAST", "FUT_DAYS_EXPIRE", "OPEN_INT"]`
+  },
+
+  // ── INDICES ──
+  { cat: 'Indices', name: 'S&P 500 Historical', desc: 'SPX daily prices',
+    endpoint: '/api/v1/equity/price/historical',
+    params: { symbol: 'SPY', start_date: '2020-01-01', provider: 'yfinance' },
+    blp: `# Bloomberg: Index data\n# Terminal: SPX Index <GO> or INDU Index <GO>\n\nsecurities = [\n    "SPX Index",     # S&P 500\n    "INDU Index",    # Dow Jones\n    "CCMP Index",    # NASDAQ Composite\n    "RTY Index",     # Russell 2000\n    "SX5E Index",    # Euro Stoxx 50\n    "NKY Index",     # Nikkei 225\n    "HSI Index",     # Hang Seng\n]\nfields = ["PX_LAST", "PX_OPEN", "PX_HIGH", "PX_LOW", "VOLUME", "CHG_PCT_1D"]`,
+    chart: { xKey: 'date', yKey: 'close', label: 'SPY' }
+  },
+  { cat: 'Indices', name: 'VIX Volatility', desc: 'CBOE volatility index',
+    endpoint: '/api/v1/equity/price/historical',
+    params: { symbol: '^VIX', start_date: '2023-01-01', provider: 'yfinance' },
+    chart: { xKey: 'date', yKey: 'close', label: 'VIX' }
+  },
+  { cat: 'Indices', name: 'Index Snapshots', desc: 'Multi-index real-time snapshot',
+    endpoint: '/api/v1/equity/market_snapshots',
+    params: { provider: 'yfinance' }
+  },
+  { cat: 'Indices', name: 'Sector Comparison', desc: 'Compare sector ETFs',
+    endpoint: '/api/v1/equity/compare/groups',
+    params: { group: 'sector', metric: 'performance', provider: 'finviz' }
+  },
+
+  // ── COMMODITIES ──
+  { cat: 'Commodities', name: 'Commodity Spot Prices', desc: 'Gold, Oil, Copper etc.',
+    endpoint: '/api/v1/commodity/price/spot',
+    params: { start_date: '2024-01-01', provider: 'fred' },
+    blp: `# Bloomberg: Commodities\n# Terminal: COMS <GO> — Commodity screen\n# or: COMDTY <GO> — Commodity monitor\n\nsecurities = [\n    "GC1 Comdty",   # Gold\n    "SI1 Comdty",   # Silver\n    "CL1 Comdty",   # WTI Crude\n    "CO1 Comdty",   # Brent Crude\n    "NG1 Comdty",   # Natural Gas\n    "HG1 Comdty",   # Copper\n    "ZW1 Comdty",   # Wheat\n    "ZS1 Comdty",   # Soybeans\n]\nfields = ["PX_LAST", "CHG_PCT_1D", "VOLUME"]`
+  },
+  { cat: 'Commodities', name: 'EIA Weekly Oil Report', desc: 'Petroleum status report',
+    endpoint: '/api/v1/commodity/petroleum_status_report',
+    params: { category: 'weekly_estimates', provider: 'eia' }
+  },
+  { cat: 'Commodities', name: 'Short-Term Energy Outlook', desc: 'EIA energy forecast',
+    endpoint: '/api/v1/commodity/short_term_energy_outlook',
+    params: { provider: 'eia' }
+  },
+
+  // ── ETF ──
+  { cat: 'ETF', name: 'ETF Info (SPY)', desc: 'Fund details & metadata',
+    endpoint: '/api/v1/etf/info', params: { symbol: 'SPY', provider: 'fmp' } },
+  { cat: 'ETF', name: 'ETF Holdings (QQQ)', desc: 'Top holdings & weights',
+    endpoint: '/api/v1/etf/holdings', params: { symbol: 'QQQ', provider: 'fmp' } },
+  { cat: 'ETF', name: 'ETF Search', desc: 'Search ETFs by keyword',
+    endpoint: '/api/v1/etf/search', params: { query: 'technology', provider: 'fmp' } },
+  { cat: 'ETF', name: 'ETF Historical (IEF)', desc: 'Bond ETF price history',
+    endpoint: '/api/v1/etf/historical', params: { symbol: 'IEF', start_date: '2024-01-01', provider: 'yfinance' },
+    chart: { xKey: 'date', yKey: 'close', label: 'IEF' } },
+  { cat: 'ETF', name: 'ETF Sectors', desc: 'Sector allocation breakdown',
+    endpoint: '/api/v1/etf/sectors', params: { symbol: 'SPY', provider: 'fmp' } },
+  { cat: 'ETF', name: 'ETF Countries', desc: 'Geographic exposure',
+    endpoint: '/api/v1/etf/countries', params: { symbol: 'EEM', provider: 'fmp' } },
+
+  // ── NEWS & SENTIMENT ──
+  { cat: 'News', name: 'Company News (AAPL)', desc: 'Latest news for a ticker',
+    endpoint: '/api/v1/news/company', params: { symbols: 'AAPL', limit: '20', provider: 'fmp' } },
+  { cat: 'News', name: 'World News', desc: 'Global financial headlines',
+    endpoint: '/api/v1/news/world', params: { limit: '20', provider: 'fmp' } },
+  { cat: 'News', name: 'Earnings Surprises', desc: 'EPS beat/miss history',
+    endpoint: '/api/v1/equity/estimates/consensus', params: { symbol: 'MSFT', provider: 'fmp' } },
+
+  // ── EQUITY EXTENDED ──
+  { cat: 'Equities', name: 'Short Interest', desc: 'Short float & days to cover',
+    endpoint: '/api/v1/equity/short_interest', params: { symbol: 'GME', provider: 'finra' } },
+  { cat: 'Equities', name: 'ESG Scores', desc: 'Environmental, Social, Governance',
+    endpoint: '/api/v1/equity/fundamental/esg', params: { symbol: 'MSFT', provider: 'fmp' } },
+  { cat: 'Equities', name: 'Revenue Segments', desc: 'Revenue by geography/product',
+    endpoint: '/api/v1/equity/fundamental/revenue_per_segment', params: { symbol: 'AAPL', provider: 'fmp' } },
+  { cat: 'Equities', name: 'Analyst Upgrades', desc: 'Recent rating changes',
+    endpoint: '/api/v1/equity/estimates/analyst_search', params: { analyst_name: 'Goldman', provider: 'fmp' } },
+
+  // ── MACRO EXTENDED ──
+  { cat: 'Macro', name: 'Unemployment Rate', desc: 'US unemployment series',
+    endpoint: '/api/v1/economy/survey/unemployment', params: { start_date: '2015-01-01', provider: 'fred' },
+    chart: { xKey: 'date', yKey: 'value', label: 'Unemployment %' } },
+  { cat: 'Macro', name: 'Retail Sales', desc: 'Monthly retail trade data',
+    endpoint: '/api/v1/economy/survey/retail_sales', params: { start_date: '2020-01-01', provider: 'fred' } },
+  { cat: 'Macro', name: 'Housing Starts', desc: 'New residential construction',
+    endpoint: '/api/v1/economy/survey/university_of_michigan', params: { start_date: '2015-01-01', provider: 'fred' } },
+  { cat: 'Macro', name: 'Balance of Payments', desc: 'Trade balance & current account',
+    endpoint: '/api/v1/economy/balance_of_payments', params: { provider: 'ecb' } },
+];
+
+// ─── Sidebar ──────────────────────────────────────────────────────────────────
+function getExamples() { return currentApi === 'bbg' ? BBG_EXAMPLES : EXAMPLES; }
+
+let _sidebarSearch = '';
+let _sidebarTag = '';
+const _collapsed = {};
+
+const CAT_SHORT = {
+  'Reference Data (BDP)': 'BDP', 'Historical Data (BDH)': 'BDH', 'Bulk Data (BDS)': 'BDS',
+  'BQL': 'BQL', 'Field Catalog': 'Fields', 'Security Lookup': 'Lookup', 'Intraday': 'Intraday',
+  'Equities': 'Equity', 'Fundamentals': 'Fundmtls', 'Fixed Income': 'Fixed Inc',
+  'FX & Crypto': 'FX / Crypto', 'Macro': 'Macro', 'Options': 'Options',
+  'Indices': 'Indices', 'Commodities': 'Cmdty', 'Yield Curves': 'Curves',
+  'ETF': 'ETF', 'News': 'News',
+};
+function shortCat(c) { return CAT_SHORT[c] || c; }
+
+function buildFilterTags() {
+  const all = [...new Set(getExamples().map(e => e.cat))];
+  document.getElementById('sidebar-tags').innerHTML =
+    `<span class="filter-tag${!_sidebarTag ? ' active' : ''}" onclick="setSidebarTag('')">All</span>` +
+    all.map(c => `<span class="filter-tag${_sidebarTag === c ? ' active' : ''}" onclick="setSidebarTag(${JSON.stringify(c)})">${shortCat(c)}</span>`).join('');
+}
+
+function setSidebarTag(tag) {
+  _sidebarTag = tag;
+  buildFilterTags();
+  buildSidebar(_sidebarSearch);
+}
+
+function buildSidebar(filter = '') {
+  _sidebarSearch = filter;
+  const list = document.getElementById('sidebar-list');
+  const f = filter.toLowerCase();
+  const cats = {};
+  getExamples().forEach((ex, i) => {
+    if (_sidebarTag && ex.cat !== _sidebarTag) return;
+    if (f && !ex.name.toLowerCase().includes(f) && !ex.desc.toLowerCase().includes(f) &&
+        !ex.cat.toLowerCase().includes(f) && !ex.endpoint.toLowerCase().includes(f)) return;
+    if (!cats[ex.cat]) cats[ex.cat] = [];
+    cats[ex.cat].push({ ex, i });
+  });
+  list.innerHTML = Object.entries(cats).map(([cat, items]) => {
+    const collapsed = _collapsed[cat];
+    return `
+      <div class="cat-header" onclick="toggleCat(${JSON.stringify(cat)})">
+        <span>${shortCat(cat)}</span>
+        <span class="cat-toggle">${collapsed ? '▶' : '▼'} ${items.length}</span>
+      </div>
+      <div style="${collapsed ? 'display:none' : ''}">
+        ${items.map(({ ex, i }) => `
+          <div class="example-item${currentExample === i ? ' active' : ''}" onclick="loadExample(${i})">
+            <div class="ex-endpoint"><span class="method-tag">GET</span><span class="ep-path">${ex.endpoint}</span></div>
+            <div class="ex-name">${ex.name}</div>
+            <div class="ex-desc">${ex.desc}</div>
+          </div>
+        `).join('')}
+      </div>`;
+  }).join('');
+}
+
+function toggleCat(cat) { _collapsed[cat] = !_collapsed[cat]; buildSidebar(_sidebarSearch); }
+function filterExamples(val) { buildSidebar(val); }
+
+// ─── Example loader ───────────────────────────────────────────────────────────
+function loadExample(i) {
+  currentExample = i;
+  const ex = getExamples()[i];
+  document.getElementById('url-input').value = location.origin + ex.endpoint;
+  renderParams(ex.params || {});
+  buildSidebar(document.getElementById('search-input').value);
+  if (ex.blp) renderBlp(ex.blp, ex);
+  else document.getElementById('blp-view').innerHTML = '<span style="color:var(--text3)">No Bloomberg code example for this endpoint.</span>';
+  renderExcel();
+  if (typeof renderBridge === 'function') renderBridge();
+}
+
+// ─── Param editor ─────────────────────────────────────────────────────────────
+let params = {};
+function renderParams(p) {
+  params = { ...p };
+  const area = document.getElementById('params-area');
+  area.innerHTML = Object.entries(params).map(([k, v]) => {
+    const isLong = k === 'query' && (v||'').length > 60;
+    const inputEl = isLong
+      ? `<textarea class="param-val" rows="3" style="resize:vertical;height:auto;font-size:10px" onchange="params['${k}']=this.value; rebuildUrl()" onkeyup="params['${k}']=this.value; rebuildUrl()">${v}</textarea>`
+      : `<input class="param-val" value="${(v||'').replace(/"/g,'&quot;')}" placeholder="${v === '' ? 'required' : ''}" onchange="params['${k}']=this.value; rebuildUrl()">`;
+    return `
+    <div class="param-group${v === '' ? ' param-required' : ''}" id="pg-${k}">
+      <span class="param-key">${k}</span>
+      <span class="param-sep">=</span>
+      ${inputEl}
+      <span class="param-del" onclick="deleteParam('${k}')">×</span>
+    </div>`;
+  }).join('') + `<button id="add-param-btn" onclick="addParam()">+ param</button>`;
+}
+
+function deleteParam(k) { delete params[k]; renderParams(params); rebuildUrl(); }
+
+function addParam() {
+  const k = prompt('Parameter name:');
+  if (!k) return;
+  const v = prompt('Value:') || '';
+  params[k] = v;
+  renderParams(params);
+  rebuildUrl();
+}
+
+function rebuildUrl() {
+  const current = document.getElementById('url-input').value;
+  const base = current.split('?')[0];
+  // Build query string — URLSearchParams encodes values correctly
+  const urlObj = new URL(base.startsWith('http') ? base : location.origin + (base.startsWith('/') ? base : '/' + base));
+  Object.entries(params).forEach(([k, v]) => { if (v !== undefined && v !== null) urlObj.searchParams.set(k, v); });
+  document.getElementById('url-input').value = urlObj.toString();
+}
+
+// ─── Request ──────────────────────────────────────────────────────────────────
+async function sendRequest() {
+  const urlInput = document.getElementById('url-input').value.trim();
+  if (!urlInput) return;
+
+  // Parse URL + merge params — BASE may be '' (same-origin), use location.origin as base
+  const absInput = urlInput.startsWith('http') ? urlInput : (location.origin + (urlInput.startsWith('/') ? '' : '/') + urlInput.replace(/^\//, ''));
+  const urlObj = new URL(absInput);
+  Object.entries(params).forEach(([k, v]) => { if (v) urlObj.searchParams.set(k, v); });
+  const finalUrl = urlObj.toString();
+
+  const btn = document.getElementById('send-btn');
+  btn.textContent = ''; btn.innerHTML = '<span class="spinner"></span>'; btn.classList.add('loading');
+
+  // Hide empty state
+  document.getElementById('empty-state').style.display = 'none';
+  document.getElementById('json-view').style.display = 'none';
+  document.getElementById('response-status').textContent = '';
+  document.getElementById('response-time').textContent = '';
+  document.getElementById('copy-btn').style.display = 'none';
+
+  const t0 = performance.now();
+  try {
+    const res = await fetch(finalUrl);
+    const elapsed = Math.round(performance.now() - t0);
+
+    const statusEl = document.getElementById('response-status');
+    statusEl.textContent = `${res.status} ${res.statusText}`;
+    statusEl.style.color = res.ok ? 'var(--green)' : 'var(--red)';
+    document.getElementById('response-time').textContent = `${elapsed}ms`;
+    document.getElementById('copy-btn').style.display = 'block';
+
+    const data = await res.json();
+    lastResponse = data;
+
+    // Handle FastAPI 422 validation errors with a friendly message
+    if (res.status === 422 && data.detail) {
+      const missing = data.detail
+        .filter(e => e.type === 'missing')
+        .map(e => e.loc[e.loc.length - 1]);
+      const jv = document.getElementById('json-view');
+      jv.style.display = 'block';
+      jv.innerHTML = missing.length
+        ? `<div class="error-banner">Missing required parameter${missing.length > 1 ? 's' : ''}: <strong>${missing.join(', ')}</strong>\n\nFill in the params above and click SEND.</div>`
+        : `<div class="error-banner">Validation error — check your parameters.\n\n${JSON.stringify(data.detail, null, 2)}</div>`;
+
+    // Handle BQL-not-licensed (503) with Excel formula fallback UI
+    } else if (res.status === 503 && typeof data.detail === 'object' && data.detail?.excel_formula) {
+      const d = data.detail;
+      const jv = document.getElementById('json-view');
+      jv.style.display = 'block';
+      const alts = (d.alternatives||[]).map(a => `<li>${a}</li>`).join('');
+      jv.innerHTML = `
+        <div class="error-banner" style="border-color:var(--amber);color:var(--amber)">
+          <strong>⚠ BQL service not licensed on this Terminal</strong><br>
+          <span style="color:var(--text2);font-size:11px">${d.reason}</span>
+        </div>
+        <div class="xl-section" style="margin-top:10px">Use in Bloomberg Excel instead</div>
+        <div class="xl-row">
+          <span class="xl-label">BQL</span>
+          <span class="xl-formula" onclick="navigator.clipboard.writeText(this.textContent)" title="Click to copy">${d.excel_formula}</span>
+        </div>
+        <div class="xl-note" style="margin-left:0;margin-top:8px">Alternatives:<ul style="margin:4px 0 0 16px;padding:0">${alts}</ul></div>`;
+      switchTab('excel');
+
+    // BDP fallback — show note banner then normal results
+    } else if (data.source === 'bdp_fallback') {
+      renderJson(data);
+      renderTable(data);
+      renderChart(data);
+      detectFieldErrors(data);
+      const jv = document.getElementById('json-view');
+      const banner = document.createElement('div');
+      banner.className = 'error-banner';
+      banner.style.cssText = 'border-color:var(--amber);color:var(--amber);margin-bottom:8px;font-size:11px';
+      banner.innerHTML = `<strong>⚠ BQL service not licensed</strong> — results fetched via BDP fallback with fiscal overrides.<br>
+        <span style="color:var(--text2)">KPI fields (deliveries, subscribers, etc.) that only exist in BQL may show null. Use the Excel tab for =BQL() formula.</span>`;
+      jv.insertBefore(banner, jv.firstChild);
+
+    } else {
+      renderJson(data);
+      renderTable(data);
+      renderChart(data);
+      detectFieldErrors(data);
+    }
+  } catch (e) {
+    lastResponse = null;
+    const jv = document.getElementById('json-view');
+    jv.style.display = 'block';
+    // Only show "API not running" hint for actual network failures (TypeError), not HTTP errors
+    const hint = e instanceof TypeError
+      ? `\n\nCould not reach the API. Check that the service is running.`
+      : '';
+    jv.innerHTML = `<div class="error-banner">Error: ${e.message}${hint}</div>`;
+    document.getElementById('response-status').textContent = 'ERROR';
+    document.getElementById('response-status').style.color = 'var(--red)';
+  }
+
+  btn.textContent = 'SEND'; btn.classList.remove('loading');
+}
+
+// ─── Field error detector — flags API-restricted fields & suggests Excel ──────
+function detectFieldErrors(data) {
+  const badFields = [];
+  const results = Array.isArray(data?.results) ? data.results
+    : (data?.results && typeof data.results === 'object') ? Object.values(data.results).flat()
+    : [];
+  results.forEach(row => {
+    Object.entries(row || {}).forEach(([k, v]) => {
+      if (typeof v === 'string' && v.startsWith('[error:') && !badFields.includes(k)) {
+        badFields.push(k);
+      }
+    });
+  });
+  if (!badFields.length) return;
+
+  // Build Excel formulas for each bad field
+  const secs = (params.securities || params.security || '').split(',').map(s => s.trim()).filter(Boolean);
+  const secStr = secs[0] || '<TICKER>';
+  const formulas = badFields.map(f => `=BDP("${secStr}","${f}")`).join('\n');
+
+  const jv = document.getElementById('json-view');
+  const banner = document.createElement('div');
+  banner.className = 'error-banner';
+  banner.style.cssText = 'border-left-color:var(--amber);color:var(--amber);margin-bottom:8px;';
+  banner.innerHTML = `<strong>&#9888; ${badFields.length} field${badFields.length>1?'s':''} not available via API:</strong> <code>${badFields.join(', ')}</code>`
+    + `<br><span style="color:var(--text2);font-size:10px;">These fields may require a separate Bloomberg license (BVAL, BEst, Intelligence, ESG, etc.) or are Excel-Add-in only.</span>`
+    + `<br><span style="color:var(--green);font-size:10px;font-family:var(--mono);">${formulas.replace(/\n/g,'<br>')}</span>`
+    + ` <button onclick="navigator.clipboard.writeText(${JSON.stringify(formulas)});this.textContent='Copied!';setTimeout(()=>this.textContent='Copy formulas',1500)" `
+    + `style="margin-left:8px;background:var(--bg3);color:var(--green);border:1px solid var(--green);font-size:10px;font-family:var(--mono);padding:2px 7px;border-radius:3px;cursor:pointer;">Copy formulas</button>`
+    + ` <button onclick="switchTab('excel')" `
+    + `style="margin-left:4px;background:var(--bg3);color:var(--amber);border:1px solid var(--amber);font-size:10px;font-family:var(--mono);padding:2px 7px;border-radius:3px;cursor:pointer;">Open Excel tab</button>`;
+  jv.insertBefore(banner, jv.firstChild);
+}
+
+// ─── JSON renderer ────────────────────────────────────────────────────────────
+function renderJson(data) {
+  const jv = document.getElementById('json-view');
+  jv.style.display = 'block';
+  jv.innerHTML = syntaxHighlight(JSON.stringify(data, null, 2));
+  switchTab('response');
+}
+
+function syntaxHighlight(json) {
+  return json
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/("(\\u[a-zA-Z0-9]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g, m => {
+      if (/^"/.test(m)) {
+        if (/:$/.test(m)) return `<span class="j-key">${m}</span>`;
+        return `<span class="j-str">${m}</span>`;
+      }
+      if (/true|false/.test(m)) return `<span class="j-bool">${m}</span>`;
+      if (/null/.test(m)) return `<span class="j-null">${m}</span>`;
+      return `<span class="j-num">${m}</span>`;
+    });
+}
+
+// ─── Table renderer ───────────────────────────────────────────────────────────
+function renderTable(data) {
+  const tv = document.getElementById('table-view');
+  let rows = [];
+  if (Array.isArray(data?.results)) rows = data.results;
+  else if (Array.isArray(data)) rows = data;
+
+  if (!rows.length || typeof rows[0] !== 'object') {
+    tv.innerHTML = '<div style="color:var(--text3);padding:20px;text-align:center">No tabular data in this response</div>';
+    return;
+  }
+
+  const keys = Object.keys(rows[0]);
+  const numericKeys = keys.filter(k => rows.some(r => typeof r[k] === 'number'));
+
+  tv.innerHTML = `<table>
+    <thead><tr>${keys.map(k => `<th onclick="sortTable('${k}')" title="Sort by ${k}">${k}<span class="sort-arrow">${sortCol===k ? (sortDir>0?'↑':'↓') : '⇅'}</span></th>`).join('')}</tr></thead>
+    <tbody>${rows.slice(0, 500).map(row => `<tr>${keys.map(k => {
+      const v = row[k];
+      let cls = '';
+      if (typeof v === 'number') {
+        cls = 'td-num';
+        // Color positive/negative for change columns
+        if (/change|chg|return|pct|perf/i.test(k)) cls += v > 0 ? ' td-pos' : ' td-neg';
+      }
+      return `<td class="${cls}" title="${v ?? ''}">${v === null || v === undefined ? '<span style="color:var(--text3)">—</span>' : v}</td>`;
+    }).join('')}</tr>`).join('')}</tbody>
+  </table>`;
+  if (rows.length > 500) tv.innerHTML += `<div style="color:var(--text3);padding:8px 10px;font-size:11px">Showing 500 of ${rows.length} rows</div>`;
+}
+
+let tableData = [];
+function sortTable(col) {
+  if (!lastResponse) return;
+  const rows = lastResponse?.results || lastResponse || [];
+  if (!Array.isArray(rows)) return;
+  sortDir = sortCol === col ? -sortDir : 1;
+  sortCol = col;
+  rows.sort((a, b) => {
+    const av = a[col], bv = b[col];
+    if (av === null) return 1; if (bv === null) return -1;
+    return sortDir * (av < bv ? -1 : av > bv ? 1 : 0);
+  });
+  renderTable({ results: rows });
+}
+
+// ─── Chart renderer ───────────────────────────────────────────────────────────
+let chartInst = null;
+function renderChart(data) {
+  const ex = currentExample !== null ? getExamples()[currentExample] : null;
+  const ctx = document.getElementById('chart-canvas').getContext('2d');
+  const msg = document.getElementById('chart-msg');
+
+  if (chartInst) { chartInst.destroy(); chartInst = null; }
+
+  const rows = data?.results || (Array.isArray(data) ? data : []);
+  if (!rows.length) { msg.textContent = 'No data to chart'; return; }
+
+  const xKey = ex?.chart?.xKey || (rows[0].date ? 'date' : Object.keys(rows[0])[0]);
+  const yKey = ex?.chart?.yKey || (rows[0].close !== undefined ? 'close' : rows[0].value !== undefined ? 'value' : Object.keys(rows[0]).find(k => typeof rows[0][k] === 'number'));
+  const label = ex?.chart?.label || yKey;
+
+  if (!yKey) { msg.textContent = 'No numeric series detected'; return; }
+  msg.textContent = '';
+
+  const labels = rows.map(r => r[xKey]);
+  const values = rows.map(r => +r[yKey]);
+  const color = '#f5a623';
+
+  // Simple canvas chart (no external deps)
+  const canvas = document.getElementById('chart-canvas');
+  const W = canvas.offsetWidth, H = 280;
+  canvas.width = W; canvas.height = H;
+  const pad = { t: 20, r: 20, b: 40, l: 70 };
+  const cw = W - pad.l - pad.r, ch = H - pad.t - pad.b;
+
+  const min = Math.min(...values), max = Math.max(...values);
+  const range = max - min || 1;
+  const toX = i => pad.l + (i / (values.length - 1)) * cw;
+  const toY = v => pad.t + ch - ((v - min) / range) * ch;
+
+  ctx.clearRect(0, 0, W, H);
+  ctx.fillStyle = '#0a0e14';
+  ctx.fillRect(0, 0, W, H);
+
+  // Grid
+  ctx.strokeStyle = '#1e2d3d'; ctx.lineWidth = 1;
+  for (let i = 0; i <= 5; i++) {
+    const y = pad.t + (ch / 5) * i;
+    ctx.beginPath(); ctx.moveTo(pad.l, y); ctx.lineTo(W - pad.r, y); ctx.stroke();
+    const val = max - (range / 5) * i;
+    ctx.fillStyle = '#4a6480'; ctx.font = '10px Consolas,monospace';
+    ctx.textAlign = 'right';
+    ctx.fillText(val.toLocaleString(undefined, { maximumFractionDigits: 2 }), pad.l - 6, y + 4);
+  }
+
+  // X axis labels (every ~80px)
+  const step = Math.max(1, Math.floor(values.length / Math.floor(cw / 80)));
+  ctx.fillStyle = '#4a6480'; ctx.font = '10px Consolas,monospace'; ctx.textAlign = 'center';
+  for (let i = 0; i < values.length; i += step) {
+    const lbl = String(labels[i] || '').slice(0, 10);
+    ctx.fillText(lbl, toX(i), H - pad.b + 16);
+  }
+
+  // Gradient fill
+  const grad = ctx.createLinearGradient(0, pad.t, 0, H - pad.b);
+  grad.addColorStop(0, 'rgba(245,166,35,0.3)');
+  grad.addColorStop(1, 'rgba(245,166,35,0)');
+  ctx.beginPath();
+  ctx.moveTo(toX(0), toY(values[0]));
+  values.forEach((v, i) => ctx.lineTo(toX(i), toY(v)));
+  ctx.lineTo(toX(values.length - 1), H - pad.b);
+  ctx.lineTo(toX(0), H - pad.b);
+  ctx.closePath();
+  ctx.fillStyle = grad; ctx.fill();
+
+  // Line
+  ctx.beginPath(); ctx.strokeStyle = color; ctx.lineWidth = 1.5;
+  values.forEach((v, i) => { i === 0 ? ctx.moveTo(toX(i), toY(v)) : ctx.lineTo(toX(i), toY(v)); });
+  ctx.stroke();
+
+  // Label
+  ctx.fillStyle = color; ctx.font = 'bold 12px Consolas,monospace'; ctx.textAlign = 'left';
+  ctx.fillText(label, pad.l, 14);
+  ctx.fillStyle = '#7a9ab8'; ctx.font = '10px Consolas,monospace';
+  ctx.fillText(`${values.length} points  |  min: ${min.toLocaleString(undefined,{maximumFractionDigits:4})}  max: ${max.toLocaleString(undefined,{maximumFractionDigits:4})}`, pad.l + 100, 14);
+}
+
+// ─── Bloomberg code renderer ──────────────────────────────────────────────────
+function renderBlp(code, ex) {
+  const keywords = ['import', 'from', 'def', 'class', 'for', 'if', 'else', 'return', 'with', 'as', 'in', 'and', 'or', 'not'];
+  let html = code
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/(#[^\n]*)/g, '<span class="blp-comment">$1</span>')
+    .replace(/("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*')/g, '<span class="blp-string">$1</span>')
+    .replace(/\b(\d+(?:\.\d+)?)\b/g, '<span class="blp-num">$1</span>');
+
+  keywords.forEach(kw => {
+    html = html.replace(new RegExp(`\\b(${kw})\\b`, 'g'), '<span class="blp-keyword">$1</span>');
+  });
+
+  const blpView = document.getElementById('blp-view');
+  blpView.innerHTML = `<div class="blp-section">Bloomberg Terminal / BLPAPI Equivalent</div>\n` + html;
+}
+
+// ─── Excel formula renderer ───────────────────────────────────────────────────
+function xlFormula(f) {
+  return `<span class="xl-formula" onclick="navigator.clipboard.writeText(this.textContent)" title="Click to copy">${f}</span>`;
+}
+function xlRow(label, formula) {
+  return `<div class="xl-row"><span class="xl-label">${label}</span>${xlFormula(formula)}</div>`;
+}
+function xlDateFmt(d) { // YYYY-MM-DD → M/D/YYYY
+  if (!d) return '';
+  const [y,m,day] = d.split('-');
+  return `${+m}/${+day}/${y}`;
+}
+
+function renderExcel() {
+  const view = document.getElementById('excel-view');
+  let urlStr = document.getElementById('url-input').value;
+  let endpoint = '', p = {};
+  try {
+    const u = new URL(urlStr.startsWith('http') ? urlStr : location.origin + urlStr);
+    endpoint = u.pathname;
+    u.searchParams.forEach((v, k) => { p[k] = v; });
+  } catch { view.innerHTML = '<div style="color:var(--text3);padding:12px;font-family:var(--mono);font-size:12px;">Load an example first.</div>'; return; }
+
+  // Also merge live params
+  Object.entries(params).forEach(([k,v]) => { if (v) p[k] = v; });
+
+  let html = '';
+
+  if (endpoint === '/bql') {
+    const query = p.query || '';
+    html += `<div class="xl-section">BQL — Bloomberg Query Language</div>`;
+    // Convert API query syntax → Excel =BQL() formula
+    // API: get(FIELD(FPT=Q,FPO=0Q,...)) for(['TICKER'])
+    // Excel: =BQL("TICKER","FIELD","FPT=Q","FPO=0Q",...)
+    let excelFormula = '';
+    try {
+      const fieldMatch = query.match(/get\((\w+)\(([^)]*)\)\)/);
+      const univMatch  = query.match(/for\(\['([^']+)'\]\)/);
+      const multiMatch = query.match(/for\(\[([^\]]+)\]\)/);
+      if (fieldMatch) {
+        const field = fieldMatch[1];
+        const overrides = fieldMatch[2].split(',').map(o => `"${o.trim()}"`).join(',');
+        if (univMatch) {
+          excelFormula = `=BQL("${univMatch[1]}","${field}",${overrides})`;
+        } else if (multiMatch) {
+          // Multi-ticker: one formula per ticker shown
+          const tickers = multiMatch[1].split(',').map(t => t.trim().replace(/'/g,''));
+          excelFormula = tickers.map(t => `=BQL("${t}","${field}",${overrides})`).join('\n');
+        }
+      }
+    } catch(e) {}
+    if (excelFormula) {
+      excelFormula.split('\n').forEach(f => { html += xlRow('', f); });
+    } else {
+      html += `<div class="xl-note">Could not parse query into Excel formula.<br>Raw query: <code>${query.replace(/</g,'&lt;')}</code></div>`;
+    }
+    html += `<div class="xl-note">⚠ =BQL() requires Bloomberg Excel Add-in with appropriate data license.<br>
+The /bql API endpoint uses the same underlying //blp/bql service.<br><br>
+<strong>BQL query (decoded):</strong><br><code style="font-size:10px;word-break:break-all">${query.replace(/</g,'&lt;')}</code></div>`;
+
+  } else if (endpoint === '/bdp') {
+    const secs = (p.securities||'').split(',').map(s=>s.trim()).filter(Boolean);
+    const flds = (p.fields||'').split(',').map(f=>f.trim()).filter(Boolean);
+    html += `<div class="xl-section">BDP — Bloomberg Data Point</div>`;
+    secs.forEach(sec => {
+      flds.forEach(fld => {
+        html += xlRow(fld, `=BDP("${sec}","${fld}")`);
+      });
+    });
+    if (secs.length > 1 || flds.length > 1) {
+      html += `<div class="xl-note">Multi-cell array — select range, enter formula, press Ctrl+Shift+Enter:<br>` +
+        xlFormula(`=BDP({"${secs.join('","')}"}, {"${flds.join('","')}"})`) + `</div>`;
+    }
+
+  } else if (endpoint === '/bdh') {
+    const secs = (p.securities||'').split(',').map(s=>s.trim()).filter(Boolean);
+    const flds = (p.fields||'').split(',').map(f=>f.trim()).filter(Boolean);
+    const sd = xlDateFmt(p.start_date), ed = xlDateFmt(p.end_date) || xlDateFmt(new Date().toISOString().slice(0,10));
+    const per = p.periodicity || 'DAILY';
+    html += `<div class="xl-section">BDH — Bloomberg Data History</div>`;
+    secs.forEach(sec => {
+      flds.forEach(fld => {
+        html += xlRow(`${sec.split(' ')[0]} ${fld}`,
+          `=BDH("${sec}","${fld}","${sd}","${ed}","periodicitySelection","${per}")`);
+      });
+    });
+    html += `<div class="xl-note">With fill/currency options:<br>` +
+      xlFormula(`=BDH("${secs[0]}","${flds[0]}","${sd}","${ed}","periodicitySelection","${per}","Days","A","Fill","P","Curr","USD")`) + `</div>`;
+
+  } else if (endpoint === '/bds') {
+    const sec = p.security || '';
+    const fld = p.field || '';
+    html += `<div class="xl-section">BDS — Bloomberg Data Set</div>`;
+    html += xlRow('Array', `=BDS("${sec}","${fld}")`);
+    html += `<div class="xl-note">Select a multi-row range, enter formula, press Ctrl+Shift+Enter.</div>`;
+
+  } else if (endpoint === '/curve') {
+    const TENORS = {
+      USD: [['1M','USGG1M Index'],['3M','USGG3M Index'],['6M','USGG6M Index'],['1Y','USGG1YR Index'],
+             ['2Y','USGG2YR Index'],['5Y','USGG5YR Index'],['10Y','USGG10YR Index'],['30Y','USGG30YR Index']],
+      EUR: [['2Y','GDBR2Y Index'],['5Y','GDBR5Y Index'],['10Y','GDBR10Y Index'],['30Y','GDBR30Y Index']],
+      GBP: [['2Y','GUKG2Y Index'],['5Y','GUKG5Y Index'],['10Y','GUKG10Y Index'],['30Y','GUKG30Y Index']],
+      JPY: [['2Y','JGBS2 Index'],['5Y','JGBS5 Index'],['10Y','JGBS10 Index'],['30Y','JGBS30 Index']],
+    };
+    const curve = (p.curve_id||'USD').toUpperCase();
+    const tenors = TENORS[curve] || TENORS.USD;
+    html += `<div class="xl-section">BDP — ${curve} Yield Curve</div>`;
+    tenors.forEach(([t, sec]) => html += xlRow(t, `=BDP("${sec}","PX_LAST")`));
+    html += `<div class="xl-note">Array form — select range and Ctrl+Shift+Enter:<br>` +
+      xlFormula(`=BDP({"${tenors.map(t=>t[1]).join('","')}"},"PX_LAST")`) + `</div>`;
+
+  } else if (endpoint === '/security/lookup') {
+    html += `<div class="xl-section">SECF — Security Search</div>`;
+    html += `<div class="xl-note">No direct Excel formula equivalent.<br>Use Bloomberg Terminal: SECF &lt;GO&gt; to search, then reference the ticker.</div>`;
+
+  } else if (endpoint.startsWith('/api/v1')) {
+    // OpenBB — generate Bloomberg equivalent if possible
+    html += `<div class="xl-section">Bloomberg Excel Equivalent</div>`;
+    const sym = p.symbol || '';
+    const bbgSec = sym ? `${sym} US Equity` : '&lt;TICKER&gt; US Equity';
+    const sd = xlDateFmt(p.start_date), ed = xlDateFmt(p.end_date) || xlDateFmt(new Date().toISOString().slice(0,10));
+
+    if (endpoint.includes('/price/historical')) {
+      html += xlRow('Close', `=BDH("${bbgSec}","PX_LAST","${sd}","${ed}","periodicitySelection","DAILY")`);
+      html += xlRow('OHLCV', `=BDH("${bbgSec}","PX_OPEN,PX_HIGH,PX_LOW,PX_LAST,PX_VOLUME","${sd}","${ed}")`);
+    } else if (endpoint.includes('/price/quote')) {
+      html += xlRow('Last', `=BDP("${bbgSec}","PX_LAST")`);
+      html += xlRow('Bid/Ask', `=BDP("${bbgSec}","PX_BID,PX_ASK,PX_VOLUME,CHG_PCT_1D")`);
+    } else if (endpoint.includes('/fundamental/income')) {
+      html += xlRow('Revenue', `=BDH("${bbgSec}","SALES_REV_TURN","${sd || '1/1/2020'}","${ed}","periodicitySelection","QUARTERLY")`);
+      html += xlRow('Net Inc.', `=BDH("${bbgSec}","IS_INC_BEF_XO_ITEM","${sd || '1/1/2020'}","${ed}","periodicitySelection","QUARTERLY")`);
+      html += xlRow('EPS', `=BDH("${bbgSec}","IS_EPS_DILUTED","${sd || '1/1/2020'}","${ed}","periodicitySelection","QUARTERLY")`);
+    } else if (endpoint.includes('/fundamental/balance')) {
+      html += xlRow('Tot. Assets', `=BDH("${bbgSec}","BS_TOT_ASSET","${sd||'1/1/2020'}","${ed}","periodicitySelection","QUARTERLY")`);
+      html += xlRow('Tot. Equity', `=BDH("${bbgSec}","TOT_EQUITY","${sd||'1/1/2020'}","${ed}","periodicitySelection","QUARTERLY")`);
+    } else if (endpoint.includes('/fundamental/cash')) {
+      html += xlRow('Op. CF', `=BDH("${bbgSec}","CF_CASH_FROM_OPER","${sd||'1/1/2020'}","${ed}","periodicitySelection","QUARTERLY")`);
+      html += xlRow('Free CF', `=BDH("${bbgSec}","FREE_CASH_FLOW","${sd||'1/1/2020'}","${ed}","periodicitySelection","QUARTERLY")`);
+    } else if (endpoint.includes('/fundamental/ratios') || endpoint.includes('/fundamental/metrics')) {
+      html += xlRow('P/E', `=BDP("${bbgSec}","PE_RATIO")`);
+      html += xlRow('P/B', `=BDP("${bbgSec}","PX_TO_BOOK_RATIO")`);
+      html += xlRow('ROE', `=BDP("${bbgSec}","RETURN_ON_EQY")`);
+      html += xlRow('EV/EBITDA', `=BDP("${bbgSec}","CURRENT_EV_TO_EBITDA")`);
+    } else if (endpoint.includes('/yield_curve') || endpoint.includes('/sofr') || endpoint.includes('/effr')) {
+      html += xlRow('SOFR', `=BDP("SOFRRATE Index","PX_LAST")`);
+      html += xlRow('Fed Funds', `=BDP("FEDL01 Index","PX_LAST")`);
+      html += xlRow('10Y UST', `=BDP("USGG10YR Index","PX_LAST")`);
+      html += xlRow('Hist SOFR', `=BDH("SOFRRATE Index","PX_LAST","${sd||'1/1/2024'}","${ed}")`);
+    } else if (endpoint.includes('/currency') || endpoint.includes('/fx')) {
+      const fxSec = sym ? `${sym.toUpperCase()} Curncy` : 'EURUSD Curncy';
+      html += xlRow('Spot', `=BDP("${fxSec}","PX_LAST,PX_BID,PX_ASK")`);
+      html += xlRow('History', `=BDH("${fxSec}","PX_LAST","${sd||'1/1/2024'}","${ed}")`);
+    } else if (endpoint.includes('/options')) {
+      html += xlRow('Chain', `=BDS("${bbgSec}","OPT_CHAIN")`);
+      html += xlRow('IV', `=BDP("${bbgSec}","HIST_VOL_30D,HIST_VOL_60D,HIST_VOL_90D")`);
+    } else if (endpoint.includes('/economy/cpi')) {
+      html += xlRow('CPI YoY', `=BDP("CPI INDX Index","PX_LAST")`);
+      html += xlRow('History', `=BDH("CPI INDX Index","PX_LAST","${sd||'1/1/2020'}","${ed}","periodicitySelection","MONTHLY")`);
+    } else if (endpoint.includes('/economy/gdp')) {
+      html += xlRow('Real GDP', `=BDH("GDP CUR$ Index","PX_LAST","${sd||'1/1/2010'}","${ed}","periodicitySelection","QUARTERLY")`);
+    } else if (endpoint.includes('/equity/profile')) {
+      html += xlRow('Name', `=BDP("${bbgSec}","COMPANY_NAME")`);
+      html += xlRow('Sector', `=BDP("${bbgSec}","GICS_SECTOR_NAME")`);
+      html += xlRow('Industry', `=BDP("${bbgSec}","GICS_INDUSTRY_NAME")`);
+      html += xlRow('Employees', `=BDP("${bbgSec}","EMPLOYEE_CNT")`);
+      html += xlRow('Mkt Cap', `=BDP("${bbgSec}","MARKET_CAP")`);
+      html += `<div class="xl-note">Terminal: ${sym || 'TICKER'} US &lt;EQUITY&gt; DES &lt;GO&gt;</div>`;
+    } else if (endpoint.includes('/estimates/price_target')) {
+      html += xlRow('Avg Target', `=BDP("${bbgSec}","BEST_TARGET_PRICE")`);
+      html += xlRow('Buy Count', `=BDP("${bbgSec}","BEST_BUY_CNT")`);
+      html += xlRow('Hold Count', `=BDP("${bbgSec}","BEST_HOLD_CNT")`);
+      html += xlRow('Sell Count', `=BDP("${bbgSec}","BEST_SELL_CNT")`);
+      html += `<div class="xl-note">Terminal: ${sym || 'TICKER'} US &lt;EQUITY&gt; ANR &lt;GO&gt; (analyst ratings)</div>`;
+    } else if (endpoint.includes('/ownership/insider')) {
+      html += `<div class="xl-note">No direct Bloomberg Excel formula for insider transactions.<br>Terminal: ${sym || 'TICKER'} US &lt;EQUITY&gt; HDS &lt;GO&gt; (holders), OWN &lt;GO&gt; (ownership)</div>`;
+    } else if (endpoint.includes('/ownership/institutional')) {
+      html += `<div class="xl-note">Institutional holders are not available as Bloomberg Excel formulas.<br>Terminal: ${sym || 'TICKER'} US &lt;EQUITY&gt; OWN &lt;GO&gt; → Institutional tab</div>`;
+    } else if (endpoint.includes('/etf/info') || endpoint.includes('/etf/search')) {
+      const etfSec = sym ? `${sym} US Equity` : 'SPY US Equity';
+      html += xlRow('Name', `=BDP("${etfSec}","FUND_ASSET_CLASS_FOCUS")`);
+      html += xlRow('AUM', `=BDP("${etfSec}","FUND_NET_ASSET_VAL")`);
+      html += xlRow('Expense', `=BDP("${etfSec}","FUND_EXPENSE_RATIO")`);
+      html += `<div class="xl-note">Terminal: ${sym||'SPY'} US &lt;EQUITY&gt; DES &lt;GO&gt; for ETF details</div>`;
+    } else if (endpoint.includes('/etf/holdings')) {
+      const etfSec = sym ? `${sym} US Equity` : 'QQQ US Equity';
+      html += xlRow('Holdings', `=BDS("${etfSec}","INDX_MEMBERS")`);
+      html += xlRow('Weights', `=BDS("${etfSec}","INDX_MWEIGHT")`);
+      html += `<div class="xl-note">Array formula — select range, Ctrl+Shift+Enter</div>`;
+    } else if (endpoint.includes('/etf/historical')) {
+      const etfSec = sym ? `${sym} US Equity` : 'SPY US Equity';
+      html += xlRow('Close', `=BDH("${etfSec}","PX_LAST","${sd||'1/1/2024'}","${ed}")`);
+      html += xlRow('Return', `=BDH("${etfSec}","TOT_RETURN_INDEX_GROSS_DVDS","${sd||'1/1/2024'}","${ed}")`);
+    } else if (endpoint.includes('/etf/sectors')) {
+      const etfSec = sym ? `${sym} US Equity` : 'SPY US Equity';
+      html += xlRow('Sectors', `=BDS("${etfSec}","FUND_SECTOR_WEIGHTS")`);
+      html += `<div class="xl-note">Array formula — select range, Ctrl+Shift+Enter</div>`;
+    } else if (endpoint.includes('/etf/countries')) {
+      const etfSec = sym ? `${sym} US Equity` : 'EEM US Equity';
+      html += xlRow('Countries', `=BDS("${etfSec}","FUND_COUNTRY_WEIGHTS")`);
+      html += `<div class="xl-note">Array formula — select range, Ctrl+Shift+Enter</div>`;
+    } else if (endpoint.includes('/news/')) {
+      html += `<div class="xl-note">News is not available as Bloomberg Excel formulas.<br>Terminal: ${sym||''} US &lt;EQUITY&gt; N &lt;GO&gt; (news), or BN &lt;GO&gt; (Bloomberg News)</div>`;
+    } else if (endpoint.includes('/estimates/consensus')) {
+      html += xlRow('EPS Est', `=BDP("${bbgSec}","BEST_EPS")`);
+      html += xlRow('EPS Hist', `=BDH("${bbgSec}","IS_EPS_DILUTED","${sd||'1/1/2020'}","${ed}","periodicitySelection","QUARTERLY")`);
+      html += xlRow('Surprise', `=BDP("${bbgSec}","EARN_SURP_PCT_LAST_QTR")`);
+      html += `<div class="xl-note">Terminal: ${sym||'TICKER'} US &lt;EQUITY&gt; EE &lt;GO&gt; (earnings estimates)</div>`;
+    } else {
+      html += `<div class="xl-note">No direct Bloomberg Excel formula for this endpoint.<br>Check Bloomberg Terminal for equivalent function.</div>`;
+    }
+  } else if (endpoint === '/intraday/bars' || endpoint === '/intraday/ticks') {
+    const sec = p.security || '';
+    const intv = p.interval || '5';
+    html += `<div class="xl-section">Intraday Data</div>`;
+    html += `<div class="xl-note">Intraday OHLCV via Excel (requires BBG Data License):<br>`;
+    html += xlFormula(`=BDH("${sec||'AAPL US Equity'}","PX_LAST","TODAY()-1","TODAY()","periodicitySelection","${intv}min")`) + `</div>`;
+    html += `<div class="xl-note">Terminal: ${sec || 'TICKER'} &lt;EQUITY&gt; GHDS &lt;GO&gt; (intraday graph)</div>`;
+  } else if (endpoint === '/fields/search' || endpoint === '/fields/info') {
+    html += `<div class="xl-section">Field Catalog</div>`;
+    html += `<div class="xl-note">Discover fields via Terminal: FLDS &lt;GO&gt;<br>Then use =BDP("security","FIELD_MNEMONIC") in Excel.</div>`;
+  } else {
+    html += `<div style="color:var(--text3);font-family:var(--mono);font-size:12px;padding:8px 0">No Excel formula available for this endpoint.</div>`;
+  }
+
+  html += `<div class="xl-copy-hint">Click any formula to copy to clipboard</div>`;
+  view.innerHTML = html;
+  // Keep Formula Builder and Bridge in sync with the current request
+  if (typeof xlbSync === 'function') xlbSync();
+  if (typeof renderBridge === 'function') renderBridge();
+}
+
+// ─── Formula Builder ──────────────────────────────────────────────────────────
+// XL_FIELDS loaded from fields.js (shared with formula-builder.html)
+
+let xlbInitDone = false;
+function xlbInit() {
+  if (xlbInitDone) return;
+  xlbInitDone = true;
+  // Build datalist autocomplete
+  const dl = document.getElementById('xlb-field-list');
+  XL_FIELDS.forEach(([, fields]) => fields.forEach(([mn]) => {
+    const opt = document.createElement('option'); opt.value = mn; dl.appendChild(opt);
+  }));
+  // Build quick reference table
+  const qref = document.getElementById('xlb-qref');
+  let html = '';
+  XL_FIELDS.forEach(([cat, fields]) => {
+    const isBqlCat = cat.includes('BQL');
+    html += `<div class="xl-qref-cat">${cat}</div>`;
+    fields.forEach(([mn, desc, api]) => {
+      const badge = api
+        ? `<span class="xl-qref-badge api-only">API</span>`
+        : isBqlCat
+          ? `<span class="xl-qref-badge excel-only">BQL</span>`
+          : `<span class="xl-qref-badge excel-only">Excel only</span>`;
+      html += `<div class="xl-qref-row" data-mn="${mn}" data-desc="${desc}" onclick="xlbUseField('${mn}')">
+        <span class="xl-qref-field">${mn}${badge}</span>
+        <span class="xl-qref-desc">${desc}</span>
+      </div>`;
+    });
+  });
+  qref.innerHTML = html;
+  xlbUpdate();
+}
+
+function xlbSync() {
+  // Sync Security from current playground params
+  const sec = (params.securities || params.security || '').split(',')[0].trim();
+  if (sec) document.getElementById('xlb-sec').value = sec;
+
+  // Sync Field(s) from current params
+  const fields = params.fields || params.field || '';
+  if (fields) document.getElementById('xlb-field').value = fields;
+
+  // Infer formula type from current URL path
+  const urlStr = document.getElementById('url-input').value || '';
+  const path = urlStr.replace(/^https?:\/\/[^/]+/, '').split('?')[0];
+  const typeMap = { '/bdp': 'bdp', '/bdh': 'bdh', '/bds': 'bds', '/bql': 'bql' };
+  const inferred = typeMap[path];
+  if (inferred) {
+    document.getElementById('xlb-type').value = inferred;
+    xlbToggleDates();
+  }
+
+  // Sync BDH dates if present
+  if (params.start_date) document.getElementById('xlb-sd').value = params.start_date;
+  if (params.end_date)   document.getElementById('xlb-ed').value = params.end_date;
+  if (params.periodicity) {
+    const per = document.getElementById('xlb-per');
+    if (per) per.value = params.periodicity.toUpperCase();
+  }
+
+  xlbUpdate();
+}
+
+function xlbUseField(mn) {
+  const cur = document.getElementById('xlb-field').value;
+  const fields = cur ? cur.split(',').map(s=>s.trim()).filter(Boolean) : [];
+  if (!fields.includes(mn)) fields.push(mn);
+  document.getElementById('xlb-field').value = fields.join(',');
+  // If field is BQL-only, auto-switch type to BQL
+  const flat = XL_FIELDS.flatMap(([,f]) => f);
+  const found = flat.find(([m]) => m === mn);
+  const isBqlCat = XL_FIELDS.find(([cat]) => cat.includes('BQL'));
+  const isBqlField = isBqlCat && isBqlCat[1].find(([m]) => m === mn);
+  if (isBqlField) {
+    document.getElementById('xlb-type').value = 'bql';
+    xlbToggleDates();
+  }
+  xlbUpdate();
+}
+
+function xlbToggleDates() {
+  const t = document.getElementById('xlb-type').value;
+  document.getElementById('xlb-dates').style.display = t === 'bdh' ? '' : 'none';
+  document.getElementById('xlb-bql-opts').style.display = t === 'bql' ? '' : 'none';
+}
+
+function xlbUpdate() {
+  const sec = document.getElementById('xlb-sec').value.trim() || '<TICKER>';
+  const fieldRaw = document.getElementById('xlb-field').value.trim();
+  const fields = fieldRaw ? fieldRaw.split(',').map(s=>s.trim()).filter(Boolean) : ['<FIELD>'];
+  const type = document.getElementById('xlb-type').value;
+  const sd = document.getElementById('xlb-sd')?.value || '';
+  const ed = document.getElementById('xlb-ed')?.value || '';
+  const per = document.getElementById('xlb-per')?.value || 'DAILY';
+
+  let formula = '', hint = '';
+  if (type === 'bdp') {
+    if (fields.length === 1) {
+      formula = `=BDP("${sec}","${fields[0]}")`;
+    } else {
+      formula = fields.map(f => `=BDP("${sec}","${f}")`).join('\n');
+    }
+    hint = 'BDP returns a single current value per cell. One formula per field.';
+  } else if (type === 'bdh') {
+    const s = sd ? xlDateFmt(sd) : 'YYYYMMDD';
+    const e = ed ? xlDateFmt(ed) : 'TODAY()';
+    formula = `=BDH("${sec}","${fields.join(',')}","${s}","${e}","periodicitySelection","${per}")`;
+    hint = 'BDH is an array formula — select a range of cells first, type the formula, then press Ctrl+Shift+Enter.';
+  } else if (type === 'bql') {
+    const fpt = document.getElementById('xlb-fpt')?.value || 'Q';
+    const fpo = document.getElementById('xlb-fpo')?.value || '0Q';
+    const mapping = document.getElementById('xlb-mapping')?.value || 'PRECISE';
+    const xlfill = document.getElementById('xlb-xlfill')?.value || 'b';
+    formula = `=BQL("${sec}","${fields[0]}","FPT=${fpt}","FPO=${fpo}","ACT_EST_MAPPING=${mapping}","FS=MRC","CURRENCY=USD","XLFILL=${xlfill}")`;
+    hint = '⚠ BQL is Excel Add-in only — NOT available via the Bloomberg API.\nBQL is the right tool for operational/KPI data (deliveries, subscribers, units sold, etc.) that BDP cannot return.\nThis is an array formula — select a range of cells, enter the formula, press Ctrl+Shift+Enter.';
+  } else {
+    formula = `=BDS("${sec}","${fields[0]}")`;
+    hint = 'BDS is an array formula — select a multi-row range first, then press Ctrl+Shift+Enter.';
+  }
+
+  // Check if any requested field is Excel-only
+  const excelOnlyFields = [];
+  const flat = XL_FIELDS.flatMap(([,f]) => f);
+  fields.forEach(f => {
+    const found = flat.find(([mn]) => mn === f.toUpperCase());
+    if (found && !found[2]) excelOnlyFields.push(f);
+  });
+  if (type !== 'bql' && excelOnlyFields.length) {
+    hint += `\n⚠ Excel-only fields: ${excelOnlyFields.join(', ')} — these will NOT work via the Bloomberg API (/bdp), only via the Excel Add-in.`;
+  }
+
+  document.getElementById('xlb-output').textContent = formula;
+  document.getElementById('xlb-hint').innerHTML = hint.replace(/\n/g,'<br>');
+}
+
+function xlbCopy() {
+  const f = document.getElementById('xlb-output').textContent;
+  navigator.clipboard.writeText(f);
+  const el = document.getElementById('xlb-output');
+  const orig = el.style.borderColor;
+  el.style.borderColor = 'var(--amber)';
+  setTimeout(() => el.style.borderColor = orig, 1000);
+}
+
+function xlbFilterQref(q) {
+  const term = q.trim().toLowerCase();
+  document.querySelectorAll('#xlb-qref .xl-qref-row').forEach(row => {
+    const match = !term || (row.dataset.mn||'').toLowerCase().includes(term) || (row.dataset.desc||'').toLowerCase().includes(term);
+    row.classList.toggle('xl-qref-hidden', !match);
+  });
+  document.querySelectorAll('#xlb-qref .xl-qref-cat').forEach(cat => {
+    let next = cat.nextElementSibling;
+    let anyVisible = false;
+    while (next && !next.classList.contains('xl-qref-cat')) {
+      if (!next.classList.contains('xl-qref-hidden')) anyVisible = true;
+      next = next.nextElementSibling;
+    }
+    cat.style.display = anyVisible ? '' : 'none';
+  });
+}
+
+// ─── Excel Bridge ─────────────────────────────────────────────────────────────
+let _bridgeMode = 'pq';
+
+function switchBridgeMode(mode) {
+  _bridgeMode = mode;
+  ['pq','vba','tsv'].forEach(m => {
+    document.getElementById(`bm-${m}`).classList.toggle('active', m === mode);
+    document.getElementById(`bridge-${m}`).style.display = m === mode ? '' : 'none';
+  });
+  renderBridge();
+}
+
+function _bridgeApiUrl() {
+  // Returns the full resolved URL for the current request (same as what sendRequest uses)
+  const raw = document.getElementById('url-input').value.trim();
+  if (!raw) return null;
+  try {
+    const abs = raw.startsWith('http') ? raw : location.origin + (raw.startsWith('/') ? '' : '/') + raw;
+    const u = new URL(abs);
+    Object.entries(params).forEach(([k, v]) => { if (v) u.searchParams.set(k, v); });
+    return u;
+  } catch { return null; }
+}
+
+function renderBridge() {
+  const u = _bridgeApiUrl();
+  if (!u) {
+    ['pq','vba','tsv'].forEach(id => {
+      const el = document.getElementById(`bridge-${id}-code`);
+      if (el) el.textContent = '// Load an example or run a request first.';
+    });
+    return;
+  }
+  const path    = u.pathname;
+  const apiBase = _config.bbg_url || u.origin;
+  const csvUrl  = (() => { const c = new URL(u.toString()); c.searchParams.set('format','csv'); return c.toString().replace(u.origin, apiBase); })();
+  const jsonUrl = u.toString().replace(u.origin, apiBase);
+
+  // ── Power Query ──
+  const pqCode = _buildPowerQuery(path, u, jsonUrl);
+  document.getElementById('bridge-pq-code').textContent = pqCode;
+
+  // ── VBA ──
+  const vbaCode = _buildVBA(path, csvUrl);
+  document.getElementById('bridge-vba-code').textContent = vbaCode;
+
+  // ── TSV ──
+  const { tsv, rows, cols } = _buildTsv(lastResponse);
+  document.getElementById('bridge-tsv-code').textContent = tsv || '// Run a request first to generate TSV data.';
+  const countEl = document.getElementById('bridge-tsv-count');
+  if (countEl && rows) countEl.textContent = `${rows} rows × ${cols} cols`;
+}
+
+function _buildPowerQuery(path, u, jsonUrl) {
+  const esc = s => s.replace(/"/g, '""');
+  if (path === '/bdp' || path === '/bdh' || path === '/bds' || path === '/bql') {
+    // Determine result key
+    const resultKey = path === '/bds' ? 'results'
+                    : path === '/bql' ? 'rows'
+                    : 'results';
+    return `let
+    Source  = Json.Document(Web.Contents("${esc(jsonUrl)}")),
+    rows    = Source[${resultKey}],
+    #"Table" = Table.FromRecords(rows)
+in
+    #"Table"`;
+  }
+  if (path.startsWith('/api/v1')) {
+    // OpenBB — structure varies; use generic approach
+    return `let
+    Source = Json.Document(Web.Contents("${esc(jsonUrl)}")),
+    data   = Source[results],
+    #"Table" = Table.FromRecords(data)
+in
+    #"Table"`;
+  }
+  // Generic fallback
+  return `let
+    Source = Web.Contents("${esc(jsonUrl)}"),
+    json   = Json.Document(Source)
+in
+    json`;
+}
+
+function _buildVBA(path, csvUrl) {
+  const esc = s => s.replace(/"/g, '""');
+  const isHistorical = path === '/bdh' || path.includes('/historical');
+  const sheetName = path === '/bdp' ? 'BBG_BDP' : path === '/bdh' ? 'BBG_BDH' : path === '/bds' ? 'BBG_BDS' : 'BBG_Data';
+  return `Sub BloombergBridge()
+    Const URL As String = "${esc(csvUrl)}"
+
+    ' Fetch CSV from Bloomberg API
+    Dim http As Object
+    Set http = CreateObject("MSXML2.XMLHTTP60")
+    http.Open "GET", URL, False
+    http.setRequestHeader "Accept", "text/csv"
+    http.Send
+
+    If http.Status <> 200 Then
+        MsgBox "Error " & http.Status & Chr(10) & http.responseText, vbCritical
+        Exit Sub
+    End If
+
+    ' Find or create output sheet
+    Dim ws As Worksheet
+    On Error Resume Next
+    Set ws = ThisWorkbook.Sheets("${sheetName}")
+    On Error GoTo 0
+    If ws Is Nothing Then
+        Set ws = ThisWorkbook.Sheets.Add
+        ws.Name = "${sheetName}"
+    End If
+    ws.Cells.ClearContents
+
+    ' Write CSV rows to sheet
+    Dim r As Long, c As Long
+    Dim allRows() As String
+    allRows = Split(http.responseText, Chr(10))
+    For r = 0 To UBound(allRows)
+        Dim line As String
+        line = Trim(allRows(r))
+        If Len(line) > 0 Then
+            Dim cols() As String
+            cols = Split(line, ",")
+            For c = 0 To UBound(cols)
+                ws.Cells(r + 1, c + 1).Value = cols(c)
+            Next c
+        End If
+    Next r
+
+    ' Format header row
+    With ws.Rows(1)
+        .Font.Bold = True
+        .Interior.Color = RGB(26, 35, 50)
+        .Font.Color = RGB(245, 166, 35)
+    End With
+    ws.Columns.AutoFit
+    ws.Activate
+
+    MsgBox "Bloomberg data loaded: " & UBound(allRows) & " rows", vbInformation
+End Sub`;
+}
+
+function _buildTsv(data) {
+  if (!data) return { tsv: '', rows: 0, cols: 0 };
+  // Extract flat array of row objects from various response shapes
+  let rowArr = [];
+  if (Array.isArray(data.results))       rowArr = data.results;
+  else if (Array.isArray(data.rows))     rowArr = data.rows;
+  else if (Array.isArray(data.data))     rowArr = data.data;
+  else if (typeof data.results === 'object' && data.results !== null) {
+    // Multi-security BDH: {sec: [{date, PX_LAST},...]}
+    for (const [sec, secRows] of Object.entries(data.results)) {
+      if (Array.isArray(secRows)) secRows.forEach(row => rowArr.push({ security: sec, ...row }));
+    }
+  }
+  if (!rowArr.length) {
+    // Single-field BDP shorthand
+    const keys = Object.keys(data).filter(k => !['security','field','count','source','note','query'].includes(k));
+    if (keys.length && typeof data[keys[0]] !== 'object') {
+      rowArr = [data];
+    }
+  }
+  if (!rowArr.length) return { tsv: '', rows: 0, cols: 0 };
+
+  const cols = [...new Set(rowArr.flatMap(r => Object.keys(r)))];
+  const lines = [cols.join('\t')];
+  rowArr.forEach(row => {
+    lines.push(cols.map(c => {
+      const v = row[c];
+      if (v === null || v === undefined) return '';
+      if (typeof v === 'object') return JSON.stringify(v);
+      return String(v);
+    }).join('\t'));
+  });
+  return { tsv: lines.join('\n'), rows: rowArr.length, cols: cols.length };
+}
+
+function bridgeCopy(mode) {
+  let text = '';
+  if (mode === 'pq')  text = document.getElementById('bridge-pq-code').textContent;
+  if (mode === 'vba') text = document.getElementById('bridge-vba-code').textContent;
+  if (mode === 'tsv') text = document.getElementById('bridge-tsv-code').textContent;
+  if (!text) return;
+  navigator.clipboard.writeText(text).then(() => {
+    const el = document.getElementById(`bridge-${mode}-code`);
+    const orig = el.style.borderColor;
+    el.style.borderColor = 'var(--amber)';
+    setTimeout(() => el.style.borderColor = orig, 1000);
+  });
+}
+
+function bridgeDownloadCsv() {
+  const u = _bridgeApiUrl();
+  if (!u) { document.getElementById('response-status').textContent = 'Run a request first.'; switchTab('response'); return; }
+  const path = u.pathname;
+  const supported = ['/bdp','/bdh','/bds'];
+  if (!supported.some(p => path === p)) {
+    document.getElementById('response-status').textContent = 'CSV export only for /bdp, /bdh, /bds. Use Copy as TSV for other endpoints.'; switchTab('response');
+    return;
+  }
+  const c = new URL(u.toString());
+  c.searchParams.set('format', 'csv');
+  // Always use same-origin path so the proxy handles it
+  window.open(c.pathname + c.search, '_blank');
+}
+
+// ─── Tab switching ────────────────────────────────────────────────────────────
+function switchTab(name) {
+  const names = ['response', 'table', 'chart', 'blp', 'excel', 'formula', 'bridge'];
+  document.querySelectorAll('#tabs > .tab').forEach((t, i) => {
+    const active = names[i] === name;
+    t.classList.toggle('active', active);
+    t.setAttribute('aria-selected', active ? 'true' : 'false');
+  });
+  document.querySelectorAll('.tab-content').forEach(tc => tc.classList.remove('active'));
+  document.getElementById(`tab-${name}`).classList.add('active');
+  if (name === 'chart' && lastResponse) renderChart(lastResponse);
+  if (name === 'excel') renderExcel();
+  if (name === 'formula') { xlbInit(); xlbSync(); }
+  if (name === 'bridge') renderBridge();
+}
+
+// ─── Utilities ────────────────────────────────────────────────────────────────
+function copyResponse() {
+  navigator.clipboard.writeText(JSON.stringify(lastResponse, null, 2));
+  const btn = document.getElementById('copy-btn');
+  btn.textContent = 'Copied!';
+  setTimeout(() => btn.textContent = 'Copy JSON', 1200);
+}
+
+function openDocs() {
+  const docsBase = _config.bbg_url || '';
+  window.open(docsBase + '/docs', '_blank');
+}
+function clearHistory() { lastResponse = null; currentExample = null; buildSidebar(); }
+
+async function checkStatus() {
+  const dot = document.getElementById('status-dot');
+  const lbl = document.getElementById('status-label');
+  // Always probe via same-origin paths (playground proxy routes these to the right upstream)
+  const probe = currentApi === 'bbg' ? '/health' : '/api/v1/equity/price/quote?symbol=AAPL&provider=yfinance';
+  const displayName = _config.display_name || (IS_LOCAL ? 'localhost' : location.hostname);
+  try {
+    const r = await fetch(probe, { signal: AbortSignal.timeout(5000) });
+    if (r.ok || r.status === 422) {  // 422 means API is up but missing params — still online
+      dot.classList.add('ok');
+      lbl.textContent = (currentApi === 'bbg' ? 'Bloomberg Terminal  ·  ' : 'OpenBB API  ·  ') + displayName;
+    } else throw new Error();
+  } catch {
+    dot.classList.remove('ok');
+    lbl.textContent = currentApi === 'bbg'
+      ? 'Bloomberg offline — Terminal must be running'
+      : 'OpenBB offline — start openbb-api on :6900';
+  }
+}
+
+// ─── Keyboard shortcut ────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); sendRequest(); }
+  if ((e.ctrlKey || e.metaKey) && e.key === 'k') { e.preventDefault(); document.getElementById('search-input').focus(); }
+});
+
+// ─── Chat ─────────────────────────────────────────────────────────────────────
+// Use same-origin for /config and /chat when on the public playground (avoids CORS preflight issues)
+const BBG_CHAT_BASE = _config.bbg_url || '';
+
+let chatHistory = [];
+let chatBusy = false;
+
+function toggleChat() {
+  const panel = document.getElementById('chat-panel');
+  const btn = document.getElementById('chat-toggle');
+  panel.classList.toggle('collapsed');
+  btn.classList.toggle('active', !panel.classList.contains('collapsed'));
+}
+
+function autoResize(el) {
+  el.style.height = '36px';
+  el.style.height = Math.min(el.scrollHeight, 100) + 'px';
+}
+
+function chatKeydown(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChat(); }
+}
+
+function appendChatMsg(role, content) {
+  const msgs = document.getElementById('chat-messages');
+  const div = document.createElement('div');
+  div.className = `chat-msg ${role}`;
+  div.innerHTML = `<div class="bubble">${renderChatContent(content, role === 'assistant')}</div>`;
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+  return div;
+}
+
+function isApiUrl(url) {
+  return /\/(bdp|bdh|bds|bql|intraday|curve|security|fields)(\/|$|\?)/.test(url) || url.includes('/api/v1');
+}
+
+function renderChatContent(text, withButtons = false) {
+  // Step 1: pull API URLs out before HTML-encoding (& in query strings would get mangled)
+  const slots = [];
+  // Pre-normalise text: encode spaces and BQL special chars in query parameter values
+  // so the URL extractor regex doesn't break on them.
+  let processed = text
+    // Encode spaces in ticker values: securities=TSLA US Equity → TSLA%20US%20Equity
+    .replace(
+      /([?&](?:securities|security)=)([A-Z][A-Z0-9 ._-]+?)(?=&|$|\s|\))/gm,
+      (_, prefix, val) => prefix + val.replace(/ /g, '%20')
+    )
+    // Encode BQL query= parameter fully so parens/brackets don't break the URL regex
+    .replace(
+      /([?&]query=)(get\([^]*?\)\s*for\([^]*?\))/gm,
+      (_, prefix, val) => prefix + encodeURIComponent(val)
+    );
+
+  if (withButtons) {
+    // URL extractor: match https://... stopping at whitespace or backtick.
+    // Strip trailing punctuation that's clearly not part of the URL (.,;:!? and unmatched closing brackets).
+    processed = processed.replace(/https?:\/\/[^\s`]+/g, raw => {
+      // Strip trailing punctuation
+      let url = raw.replace(/[.,;:!?]+$/, '');
+      // Strip unmatched trailing ) ] >
+      for (const [open, close] of [['(',')'],[  '[',']'],['<','>']]) {
+        const opens = (url.match(new RegExp('\\' + open, 'g')) || []).length;
+        const closes = (url.match(new RegExp('\\' + close, 'g')) || []).length;
+        if (closes > opens) url = url.slice(0, url.lastIndexOf(close));
+      }
+      if (!isApiUrl(url)) return raw;
+      const i = slots.length;
+      slots.push(url);
+      return `\x00SLOT${i}\x00`;
+    });
+  }
+  // Step 2: HTML-encode + light markdown
+  let html = processed
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/```(\w*)\n?([\s\S]*?)```/g, (_, lang, body) => {
+      const label = lang ? `<span style="color:var(--green);font-size:10px;font-family:var(--mono);opacity:.8;display:block;margin-bottom:4px;">${lang.toUpperCase()}</span>` : '';
+      return `<pre style="position:relative">${label}<code>${body}</code></pre>`;
+    })
+    .replace(/`([^`]+)`/g, '<code>$1</code>')
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  // Step 3: inject inline run buttons at each URL's location
+  if (withButtons) {
+    window._chatUrls = window._chatUrls || [];
+    html = html.replace(/\x00SLOT(\d+)\x00/g, (_, i) => {
+      const url = slots[+i];
+      const idx = window._chatUrls.length;
+      window._chatUrls.push(url);
+      const display = decodeURIComponent(url).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      return `<span class="api-call-block"><a class="api-link" href="#" onclick="runUrlFromChatIdx(${idx});return false;">${display}</a><button class="run-btn" onclick="runUrlFromChatIdx(${idx})">&#9654; Run</button></span>`;
+    });
+  }
+  return html;
+}
+
+function apiUrlLabel(url) {
+  try {
+    const u = new URL(url);
+    // Shorten /api/v1/equity/price/historical → /equity/price/historical
+    const path = u.pathname.replace('/api/v1', '');
+    const p = u.searchParams;
+    const subject = p.get('securities') || p.get('security') || p.get('symbol') ||
+                    p.get('query') || p.get('curve_id') || p.get('fields') || '';
+    const short = subject.length > 24 ? subject.slice(0, 24) + '…' : subject;
+    return '→ ' + path + (short ? '  · ' + short : '');
+  } catch { return '→ Load'; }
+}
+
+function loadUrlIntoPlayground(url) {
+  // Detect which API this URL belongs to
+  const isBbg = /\/(bdp|bdh|bds|bql|intraday|curve|security|fields)(\/|$|\?)/.test(url)
+             || (_config.bbg_url && url.includes(_config.bbg_url));
+  const targetApi = isBbg ? 'bbg' : 'openbb';
+
+  // Switch toggle if needed
+  if (currentApi !== targetApi) switchApi(targetApi);
+
+  // Strip any base to get just the path+query
+  let path = url;
+  [_config.bbg_url, _config.openbb_url].filter(Boolean).forEach(base => {
+    path = path.replace(base, '');
+  });
+  path = path.replace(/^https?:\/\/[^/]+/, '');
+
+  const urlObj = new URL(location.origin + path);
+  document.getElementById('url-input').value = location.origin + urlObj.pathname + urlObj.search;
+  const newParams = {};
+  urlObj.searchParams.forEach((v, k) => { newParams[k] = v; });
+
+  // Auto-add missing required params as empty so user sees what to fill in
+  const endpoint = urlObj.pathname;
+  const REQUIRED_PARAMS = {
+    '/bdp':            ['securities', 'fields'],
+    '/bdh':            ['securities', 'fields', 'start_date'],
+    '/bds':            ['security', 'field'],
+    '/bql':            ['query'],
+    '/intraday/bars':  ['security', 'start_datetime'],
+    '/intraday/ticks': ['security', 'start_datetime'],
+    '/fields/search':  ['query'],
+    '/fields/info':    ['fields'],
+    '/security/lookup':['query'],
+  };
+  const required = REQUIRED_PARAMS[endpoint] || [];
+  required.forEach(k => { if (!(k in newParams)) newParams[k] = ''; });
+
+  renderParams(newParams);
+  currentExample = null;
+  buildSidebar(document.getElementById('search-input').value);
+}
+
+function runUrlFromChatIdx(idx) {
+  const url = (window._chatUrls || [])[idx];
+  if (url) runUrlFromChat(url);
+}
+
+function runUrlFromChat(url) {
+  loadUrlIntoPlayground(url);
+  renderExcel();  // Keep Excel tab in sync
+  if (typeof renderBridge === 'function') renderBridge();
+  document.getElementById('url-input').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  const path = url.replace(/^https?:\/\/[^/]+/, '').split('?')[0];
+  const REQUIRED = {
+    '/bdp':            ['securities', 'fields'],
+    '/bdh':            ['securities', 'fields', 'start_date'],
+    '/bds':            ['security', 'field'],
+    '/bql':            ['query'],
+    '/intraday/bars':  ['security', 'start_datetime'],
+    '/intraday/ticks': ['security', 'start_datetime'],
+  };
+  const req = REQUIRED[path] || [];
+  const missing = req.filter(k => !params[k]);
+  if (missing.length) {
+    // Show inline notice in the params area — don't fire a doomed request
+    const area = document.getElementById('params-area');
+    const notice = document.createElement('div');
+    notice.style.cssText = 'color:var(--amber);font-size:11px;padding:6px 0;font-family:var(--mono);';
+    notice.textContent = '⚠ Fill in: ' + missing.join(', ');
+    area.insertBefore(notice, area.firstChild);
+    setTimeout(() => notice.remove(), 4000);
+  } else {
+    sendRequest();
+  }
+}
+
+async function sendChat() {
+  if (chatBusy) return;
+  const input = document.getElementById('chat-input');
+  const text = input.value.trim();
+  if (!text) return;
+  input.value = '';
+  input.style.height = '36px';
+
+  chatHistory.push({ role: 'user', content: text });
+  appendChatMsg('user', text);
+
+  chatBusy = true;
+  document.getElementById('chat-send').disabled = true;
+  document.getElementById('chat-typing').style.display = 'block';
+
+  // Create assistant bubble for streaming
+  const msgs = document.getElementById('chat-messages');
+  const div = document.createElement('div');
+  div.className = 'chat-msg assistant';
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+  div.appendChild(bubble);
+  msgs.appendChild(div);
+
+  let fullText = '';
+  try {
+    const res = await fetch(`${BBG_CHAT_BASE}/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messages: chatHistory }),
+    });
+    if (!res.ok) throw new Error(`API error: ${res.status}`);
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const lines = buf.split('\n');
+      buf = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const data = line.slice(6);
+        if (data === '[DONE]') break;
+        try {
+          const { text } = JSON.parse(data);
+          fullText += text;
+          bubble.innerHTML = renderChatContent(fullText);
+          msgs.scrollTop = msgs.scrollHeight;
+        } catch {}
+      }
+    }
+    // Re-render final text with inline load buttons
+    bubble.innerHTML = renderChatContent(fullText, true);
+    // If the response contains Excel formulas, append a shortcut button to the Excel tab
+    if (/```\s*[Ee]xcel/i.test(fullText) || /=BD[PHSp]\(/i.test(fullText)) {
+      const xlBtn = document.createElement('div');
+      xlBtn.style.cssText = 'margin-top:8px;';
+      xlBtn.innerHTML = `<button onclick="switchTab('excel')" style="background:var(--bg3);color:var(--green);border:1px solid var(--green);font-size:10px;font-family:var(--mono);padding:3px 10px;border-radius:3px;cursor:pointer;">&#9654; Open Excel tab</button>`;
+      bubble.appendChild(xlBtn);
+    }
+    chatHistory.push({ role: 'assistant', content: fullText });
+  } catch (e) {
+    const safeMsg = (e.message || 'Unknown error').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    bubble.innerHTML = `<span style="color:var(--red)">Error: ${safeMsg}</span>`;
+  }
+
+  document.getElementById('chat-typing').style.display = 'none';
+  document.getElementById('chat-send').disabled = false;
+  chatBusy = false;
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+// ─── Settings modal ───────────────────────────────────────────────────────────
+async function openSettings() {
+  document.getElementById('settings-modal').style.display = 'flex';
+  // Populate endpoint fields from current config
+  document.getElementById('settings-bbg-url').value = _config.bbg_url || '';
+  document.getElementById('settings-openbb-url').value = _config.openbb_url || '';
+  document.getElementById('settings-display-name').value = _config.display_name || '';
+  // Check Anthropic key status
+  document.getElementById('settings-status').textContent = 'checking...';
+  try {
+    const r = await fetch(`${BBG_CHAT_BASE}/config`);
+    const d = await r.json();
+    document.getElementById('settings-status').textContent =
+      d.anthropic_key_set ? `Key configured (${d.source})` : 'No key set -- chat will not work';
+    document.getElementById('settings-status').style.color =
+      d.anthropic_key_set ? 'var(--green)' : 'var(--red)';
+  } catch { document.getElementById('settings-status').textContent = 'Cannot reach API server'; }
+}
+function closeSettings() { document.getElementById('settings-modal').style.display = 'none'; }
+async function saveSettings() {
+  // Save endpoint config to localStorage
+  _config.bbg_url      = document.getElementById('settings-bbg-url').value.trim().replace(/\/+$/, '');
+  _config.openbb_url   = document.getElementById('settings-openbb-url').value.trim().replace(/\/+$/, '');
+  _config.display_name = document.getElementById('settings-display-name').value.trim();
+  _saveConfig(_config);
+  BASES.bbg    = _config.bbg_url;
+  BASES.openbb = _config.openbb_url;
+  BASE = BASES[currentApi];
+
+  // Save Anthropic key if provided
+  const key = document.getElementById('settings-apikey').value.trim();
+  if (key) {
+    document.getElementById('settings-status').textContent = 'saving key...';
+    try {
+      const chatBase = _config.bbg_url || '';
+      const r = await fetch(`${chatBase}/config`, {
+        method: 'POST', headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ANTHROPIC_API_KEY: key})
+      });
+      const d = await r.json();
+      document.getElementById('settings-status').textContent = d.status === 'saved' ? 'Saved!' : 'Error';
+      document.getElementById('settings-status').style.color = 'var(--green)';
+      document.getElementById('settings-apikey').value = '';
+    } catch(e) {
+      document.getElementById('settings-status').textContent = 'Key save error: ' + e.message;
+      document.getElementById('settings-status').style.color = 'var(--red)';
+      return;
+    }
+  }
+  closeSettings();
+  checkStatus();
+}
+function resetSettings() {
+  _config = { ..._DEFAULTS };
+  _saveConfig(_config);
+  BASES.bbg    = _config.bbg_url;
+  BASES.openbb = _config.openbb_url;
+  BASE = BASES[currentApi];
+  document.getElementById('settings-bbg-url').value = '';
+  document.getElementById('settings-openbb-url').value = '';
+  document.getElementById('settings-display-name').value = '';
+  document.getElementById('settings-status').textContent = 'Reset to defaults';
+  document.getElementById('settings-status').style.color = 'var(--text3)';
+}
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSettings(); });
+
+// ─── Init ─────────────────────────────────────────────────────────────────────
+buildFilterTags();
+buildSidebar();
+checkStatus();
+setInterval(checkStatus, 15000);
+
+// Resize chart when window resizes
+window.addEventListener('resize', () => { if (lastResponse) renderChart(lastResponse); });
+</script>
+</body>
+</html>
