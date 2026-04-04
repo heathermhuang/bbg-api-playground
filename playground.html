@@ -354,10 +354,26 @@
     </div>
 
     <div style="color:var(--amber);font-size:10px;letter-spacing:1px;font-weight:700;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--border2)">AI ASSISTANT</div>
-    <div style="color:var(--text2);font-size:10px;margin-bottom:6px">ANTHROPIC_API_KEY <span style="color:var(--text3)">(required for chatbot)</span></div>
-    <input id="settings-apikey" type="password" placeholder="sk-ant-api03-..."
-      style="width:100%;background:var(--bg3);border:1px solid var(--border2);color:var(--text);padding:6px 8px;border-radius:4px;font-family:var(--mono);font-size:11px;outline:none;margin-bottom:4px">
-    <div id="settings-status" style="font-size:10px;color:var(--text3);min-height:14px;margin-bottom:14px"></div>
+    <div style="display:flex;gap:8px;margin-bottom:6px;align-items:center">
+      <label style="color:var(--text2);font-size:10px;min-width:100px">Provider</label>
+      <select id="settings-provider" onchange="onProviderChange()"
+        style="flex:1;background:var(--bg3);border:1px solid var(--border2);color:var(--text);padding:6px 8px;border-radius:4px;font-family:var(--mono);font-size:11px;outline:none">
+        <option value="anthropic">Anthropic (Claude)</option>
+        <option value="openai">OpenAI (GPT)</option>
+        <option value="google">Google (Gemini)</option>
+      </select>
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:6px;align-items:center">
+      <label style="color:var(--text2);font-size:10px;min-width:100px">Model</label>
+      <input id="settings-model" placeholder="claude-sonnet-4-6"
+        style="flex:1;background:var(--bg3);border:1px solid var(--border2);color:var(--text);padding:6px 8px;border-radius:4px;font-family:var(--mono);font-size:11px;outline:none">
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:4px;align-items:center">
+      <label style="color:var(--text2);font-size:10px;min-width:100px">API Key</label>
+      <input id="settings-apikey" type="password" placeholder="sk-ant-api03-..."
+        style="flex:1;background:var(--bg3);border:1px solid var(--border2);color:var(--text);padding:6px 8px;border-radius:4px;font-family:var(--mono);font-size:11px;outline:none">
+    </div>
+    <div id="settings-status" style="font-size:10px;color:var(--text3);min-height:14px;margin-bottom:14px;padding-left:108px"></div>
 
     <div style="display:flex;gap:8px;justify-content:space-between;align-items:center">
       <button onclick="resetSettings()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-family:var(--mono);font-size:10px;text-decoration:underline">Reset defaults</button>
@@ -598,6 +614,8 @@ const _DEFAULTS = {
   bbg_url:      IS_LOCAL ? 'http://127.0.0.1:8195' : '',
   openbb_url:   IS_LOCAL ? 'http://127.0.0.1:6900' : '',
   display_name: '',
+  ai_provider:  'anthropic',
+  ai_model:     '',
 };
 function _loadConfig() {
   try { return { ..._DEFAULTS, ...JSON.parse(localStorage.getItem('bbg-playground-config') || '{}') }; }
@@ -2428,7 +2446,11 @@ async function sendChat() {
     const res = await fetch(`${BBG_CHAT_BASE}/chat`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages: chatHistory }),
+      body: JSON.stringify({
+        messages: chatHistory,
+        provider: _config.ai_provider || 'anthropic',
+        model: _config.ai_model || undefined,
+      }),
     });
     if (!res.ok) throw new Error(`API error: ${res.status}`);
     const reader = res.body.getReader();
@@ -2474,22 +2496,62 @@ async function sendChat() {
 }
 
 // ─── Settings modal ───────────────────────────────────────────────────────────
+const _PROVIDER_DEFAULTS = {
+  anthropic: { model: 'claude-sonnet-4-6', placeholder: 'sk-ant-api03-...' },
+  openai:    { model: 'gpt-4o',            placeholder: 'sk-proj-...' },
+  google:    { model: 'gemini-2.5-flash',  placeholder: 'AIza...' },
+};
+
+function onProviderChange() {
+  const p = document.getElementById('settings-provider').value;
+  const defaults = _PROVIDER_DEFAULTS[p] || _PROVIDER_DEFAULTS.anthropic;
+  document.getElementById('settings-model').placeholder = defaults.model;
+  document.getElementById('settings-apikey').placeholder = defaults.placeholder;
+  // If model field is empty or was a default from another provider, update it
+  const modelInput = document.getElementById('settings-model');
+  const allDefaults = Object.values(_PROVIDER_DEFAULTS).map(d => d.model);
+  if (!modelInput.value || allDefaults.includes(modelInput.value)) {
+    modelInput.value = defaults.model;
+  }
+  // Update status for this provider
+  _updateProviderStatus(p);
+}
+
+async function _updateProviderStatus(provider) {
+  const statusEl = document.getElementById('settings-status');
+  statusEl.textContent = 'checking...';
+  statusEl.style.color = 'var(--text3)';
+  try {
+    const r = await fetch(`${BBG_CHAT_BASE}/config`);
+    const d = await r.json();
+    const pInfo = d.providers && d.providers[provider];
+    if (pInfo) {
+      statusEl.textContent = pInfo.key_set ? `Key configured (${pInfo.source})` : 'No key set — chat will not work';
+      statusEl.style.color = pInfo.key_set ? 'var(--green)' : 'var(--red)';
+    } else {
+      // Legacy fallback
+      statusEl.textContent = d.anthropic_key_set ? `Key configured (${d.source})` : 'No key set';
+      statusEl.style.color = d.anthropic_key_set ? 'var(--green)' : 'var(--red)';
+    }
+  } catch { statusEl.textContent = 'Cannot reach API server'; statusEl.style.color = 'var(--red)'; }
+}
+
 async function openSettings() {
   document.getElementById('settings-modal').style.display = 'flex';
   // Populate endpoint fields from current config
   document.getElementById('settings-bbg-url').value = _config.bbg_url || '';
   document.getElementById('settings-openbb-url').value = _config.openbb_url || '';
   document.getElementById('settings-display-name').value = _config.display_name || '';
-  // Check Anthropic key status
-  document.getElementById('settings-status').textContent = 'checking...';
-  try {
-    const r = await fetch(`${BBG_CHAT_BASE}/config`);
-    const d = await r.json();
-    document.getElementById('settings-status').textContent =
-      d.anthropic_key_set ? `Key configured (${d.source})` : 'No key set -- chat will not work';
-    document.getElementById('settings-status').style.color =
-      d.anthropic_key_set ? 'var(--green)' : 'var(--red)';
-  } catch { document.getElementById('settings-status').textContent = 'Cannot reach API server'; }
+  // Populate AI settings
+  document.getElementById('settings-provider').value = _config.ai_provider || 'anthropic';
+  const p = document.getElementById('settings-provider').value;
+  const defaults = _PROVIDER_DEFAULTS[p] || _PROVIDER_DEFAULTS.anthropic;
+  document.getElementById('settings-model').value = _config.ai_model || defaults.model;
+  document.getElementById('settings-model').placeholder = defaults.model;
+  document.getElementById('settings-apikey').placeholder = defaults.placeholder;
+  document.getElementById('settings-apikey').value = '';
+  // Check key status for selected provider
+  _updateProviderStatus(p);
 }
 function closeSettings() { document.getElementById('settings-modal').style.display = 'none'; }
 async function saveSettings() {
@@ -2497,20 +2559,26 @@ async function saveSettings() {
   _config.bbg_url      = document.getElementById('settings-bbg-url').value.trim().replace(/\/+$/, '');
   _config.openbb_url   = document.getElementById('settings-openbb-url').value.trim().replace(/\/+$/, '');
   _config.display_name = document.getElementById('settings-display-name').value.trim();
+  _config.ai_provider  = document.getElementById('settings-provider').value;
+  _config.ai_model     = document.getElementById('settings-model').value.trim();
   _saveConfig(_config);
   BASES.bbg    = _config.bbg_url;
   BASES.openbb = _config.openbb_url;
   BASE = BASES[currentApi];
 
-  // Save Anthropic key if provided
+  // Save API key if provided — send to the right config field for the provider
   const key = document.getElementById('settings-apikey').value.trim();
   if (key) {
     document.getElementById('settings-status').textContent = 'saving key...';
+    const provider = _config.ai_provider || 'anthropic';
+    const keyMap = { anthropic: 'ANTHROPIC_API_KEY', openai: 'OPENAI_API_KEY', google: 'GOOGLE_API_KEY' };
+    const payload = {};
+    payload[keyMap[provider] || 'ANTHROPIC_API_KEY'] = key;
     try {
       const chatBase = _config.bbg_url || '';
       const r = await fetch(`${chatBase}/config`, {
         method: 'POST', headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({ANTHROPIC_API_KEY: key})
+        body: JSON.stringify(payload)
       });
       const d = await r.json();
       document.getElementById('settings-status').textContent = d.status === 'saved' ? 'Saved!' : 'Error';

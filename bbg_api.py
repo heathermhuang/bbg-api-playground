@@ -683,40 +683,88 @@ def curve(
 # ── AI Chat ───────────────────────────────────────────────────────────────────
 
 class ConfigRequest(BaseModel):
-    ANTHROPIC_API_KEY: str
+    ANTHROPIC_API_KEY: Optional[str] = None
+    OPENAI_API_KEY: Optional[str] = None
+    GOOGLE_API_KEY: Optional[str] = None
 
 _CFG_DIR = os.environ.get("CONFIG_DIR", os.path.dirname(os.path.abspath(__file__)))
+
+# Provider definitions: env-var name, config-file key, default model, API base URL
+AI_PROVIDERS = {
+    "anthropic": {
+        "env_key": "ANTHROPIC_API_KEY",
+        "default_model": "claude-sonnet-4-6",
+        "base_url": "https://api.anthropic.com",
+    },
+    "openai": {
+        "env_key": "OPENAI_API_KEY",
+        "default_model": "gpt-4o",
+        "base_url": "https://api.openai.com",
+    },
+    "google": {
+        "env_key": "GOOGLE_API_KEY",
+        "default_model": "gemini-2.5-flash",
+        "base_url": "https://generativelanguage.googleapis.com",
+    },
+}
+
+def _load_cfg():
+    cfg_path = os.path.join(_CFG_DIR, "config.json")
+    try:
+        with open(cfg_path) as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+def _save_cfg(data):
+    cfg_path = os.path.join(_CFG_DIR, "config.json")
+    with open(cfg_path, "w") as f:
+        json.dump(data, f)
+
+def _get_api_key(provider: str) -> str:
+    """Get API key for provider: env var → config file."""
+    info = AI_PROVIDERS.get(provider, AI_PROVIDERS["anthropic"])
+    key = os.environ.get(info["env_key"]) or ""
+    if not key:
+        key = _load_cfg().get(info["env_key"], "")
+    return key
 
 @app.post("/config", tags=["System"])
 def set_config(req: ConfigRequest):
     """Save API keys to config.json."""
-    cfg_path = os.path.join(_CFG_DIR, "config.json")
     try:
-        existing = {}
-        try:
-            with open(cfg_path) as f:
-                existing = json.load(f)
-        except Exception:
-            pass
-        existing["ANTHROPIC_API_KEY"] = req.ANTHROPIC_API_KEY
-        with open(cfg_path, "w") as f:
-            json.dump(existing, f)
+        existing = _load_cfg()
+        if req.ANTHROPIC_API_KEY is not None:
+            existing["ANTHROPIC_API_KEY"] = req.ANTHROPIC_API_KEY
+        if req.OPENAI_API_KEY is not None:
+            existing["OPENAI_API_KEY"] = req.OPENAI_API_KEY
+        if req.GOOGLE_API_KEY is not None:
+            existing["GOOGLE_API_KEY"] = req.GOOGLE_API_KEY
+        _save_cfg(existing)
         return {"status": "saved"}
     except Exception as e:
         raise HTTPException(500, detail=str(e))
 
 @app.get("/config", tags=["System"])
 def get_config():
-    """Check which API keys are configured."""
-    cfg_path = os.path.join(_CFG_DIR, "config.json")
-    has_env = bool(os.environ.get("ANTHROPIC_API_KEY"))
-    has_file = False
-    try:
-        with open(cfg_path) as f:
-            has_file = bool(json.load(f).get("ANTHROPIC_API_KEY"))
-    except Exception:
-        pass
-    return {"anthropic_key_set": has_env or has_file, "source": "env" if has_env else ("file" if has_file else "none")}
+    """Check which API keys are configured per provider."""
+    cfg = _load_cfg()
+    providers = {}
+    for name, info in AI_PROVIDERS.items():
+        has_env = bool(os.environ.get(info["env_key"]))
+        has_file = bool(cfg.get(info["env_key"]))
+        providers[name] = {
+            "key_set": has_env or has_file,
+            "source": "env" if has_env else ("file" if has_file else "none"),
+            "default_model": info["default_model"],
+        }
+    # Legacy fields for backward compat
+    anth = providers.get("anthropic", {})
+    return {
+        "anthropic_key_set": anth.get("key_set", False),
+        "source": anth.get("source", "none"),
+        "providers": providers,
+    }
 
 
 class ChatMessage(BaseModel):
@@ -730,6 +778,8 @@ class ChatMessage(BaseModel):
 
 class ChatRequest(BaseModel):
     messages: List[ChatMessage]
+    provider: Optional[str] = None   # anthropic | openai | google
+    model: Optional[str] = None      # override default model
 
 BBG_BASE_URL = os.environ.get("BBG_BASE_URL", "")
 OPENBB_BASE_URL = os.environ.get("OPENBB_BASE_URL", "")
@@ -1002,59 +1052,144 @@ CHAT_SYSTEM = (CHAT_SYSTEM
 
 @app.post("/chat", tags=["AI Assistant"])
 async def chat(req: ChatRequest):
-    """AI assistant that helps construct Bloomberg and OpenBB API calls."""
+    """AI assistant that helps construct Bloomberg and OpenBB API calls.
+    Supports Anthropic, OpenAI, and Google Gemini providers."""
     import httpx
 
-    # Key priority: env var → config file
-    api_key = os.environ.get("ANTHROPIC_API_KEY") or ""
-    if not api_key:
-        cfg_path = os.path.join(_CFG_DIR, "config.json")
-        try:
-            with open(cfg_path) as f:
-                api_key = json.load(f).get("ANTHROPIC_API_KEY", "")
-        except Exception:
-            pass
-    if not api_key:
-        raise HTTPException(503, detail="No ANTHROPIC_API_KEY found. Enter it in the playground settings (⚙).")
+    provider = (req.provider or os.environ.get("AI_PROVIDER", "anthropic")).lower()
+    if provider not in AI_PROVIDERS:
+        raise HTTPException(400, detail=f"Unknown provider '{provider}'. Supported: {', '.join(AI_PROVIDERS)}")
 
+    api_key = _get_api_key(provider)
+    if not api_key:
+        env_name = AI_PROVIDERS[provider]["env_key"]
+        raise HTTPException(503, detail=f"No {env_name} found. Enter it in the playground settings (⚙).")
+
+    info = AI_PROVIDERS[provider]
+    model = req.model or os.environ.get("AI_MODEL") or os.environ.get("ANTHROPIC_MODEL") or info["default_model"]
+    messages = [{"role": m.safe_role, "content": m.content} for m in req.messages]
+
+    if provider == "anthropic":
+        generator = _stream_anthropic(api_key, model, messages)
+    elif provider == "openai":
+        generator = _stream_openai(api_key, model, messages)
+    elif provider == "google":
+        generator = _stream_google(api_key, model, messages)
+    else:
+        raise HTTPException(400, detail=f"Provider '{provider}' not implemented")
+
+    return StreamingResponse(generator, media_type="text/event-stream",
+                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+
+
+async def _stream_anthropic(api_key: str, model: str, messages: list):
+    """Stream from Anthropic Messages API."""
+    import httpx
     base_url = os.environ.get("ANTHROPIC_BASE_URL", "https://api.anthropic.com")
     headers = {
         "anthropic-version": "2023-06-01",
         "content-type": "application/json",
         "x-api-key": api_key,
     }
-
-    model = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-6")
     body = {
         "model": model,
         "max_tokens": 1024,
         "system": CHAT_SYSTEM,
-        "messages": [{"role": m.safe_role, "content": m.content} for m in req.messages],
+        "messages": messages,
         "stream": True,
     }
+    async with httpx.AsyncClient(timeout=60) as client:
+        async with client.stream("POST", f"{base_url}/v1/messages",
+                                 headers=headers, json=body) as resp:
+            async for line in resp.aiter_lines():
+                if not line.startswith("data:"):
+                    continue
+                data = line[5:].strip()
+                if data == "[DONE]":
+                    break
+                try:
+                    ev = json.loads(data)
+                    if ev.get("type") == "content_block_delta":
+                        text = ev["delta"].get("text", "")
+                        if text:
+                            yield f"data: {json.dumps({'text': text})}\n\n"
+                except Exception:
+                    pass
+    yield "data: [DONE]\n\n"
 
-    async def generate():
-        async with httpx.AsyncClient(timeout=60) as client:
-            async with client.stream("POST", f"{base_url}/v1/messages",
-                                     headers=headers, json=body) as resp:
-                async for line in resp.aiter_lines():
-                    if not line.startswith("data:"):
-                        continue
-                    data = line[5:].strip()
-                    if data == "[DONE]":
-                        break
-                    try:
-                        ev = json.loads(data)
-                        if ev.get("type") == "content_block_delta":
-                            text = ev["delta"].get("text", "")
-                            if text:
-                                yield f"data: {json.dumps({'text': text})}\n\n"
-                    except Exception:
-                        pass
-        yield "data: [DONE]\n\n"
 
-    return StreamingResponse(generate(), media_type="text/event-stream",
-                             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
+async def _stream_openai(api_key: str, model: str, messages: list):
+    """Stream from OpenAI-compatible Chat Completions API.
+    Works with OpenAI, Azure OpenAI, Groq, Together, Mistral, etc."""
+    import httpx
+    base_url = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com")
+    headers = {
+        "content-type": "application/json",
+        "authorization": f"Bearer {api_key}",
+    }
+    body = {
+        "model": model,
+        "max_tokens": 1024,
+        "messages": [{"role": "system", "content": CHAT_SYSTEM}] + messages,
+        "stream": True,
+    }
+    async with httpx.AsyncClient(timeout=60) as client:
+        async with client.stream("POST", f"{base_url}/v1/chat/completions",
+                                 headers=headers, json=body) as resp:
+            async for line in resp.aiter_lines():
+                if not line.startswith("data:"):
+                    continue
+                data = line[5:].strip()
+                if data == "[DONE]":
+                    break
+                try:
+                    ev = json.loads(data)
+                    delta = ev.get("choices", [{}])[0].get("delta", {})
+                    text = delta.get("content", "")
+                    if text:
+                        yield f"data: {json.dumps({'text': text})}\n\n"
+                except Exception:
+                    pass
+    yield "data: [DONE]\n\n"
+
+
+async def _stream_google(api_key: str, model: str, messages: list):
+    """Stream from Google Gemini generateContent API."""
+    import httpx
+    base_url = os.environ.get("GOOGLE_BASE_URL", "https://generativelanguage.googleapis.com")
+
+    # Convert chat messages to Gemini format
+    contents = []
+    for m in messages:
+        role = "user" if m["role"] == "user" else "model"
+        contents.append({"role": role, "parts": [{"text": m["content"]}]})
+
+    body = {
+        "contents": contents,
+        "systemInstruction": {"parts": [{"text": CHAT_SYSTEM}]},
+        "generationConfig": {"maxOutputTokens": 1024},
+    }
+    url = f"{base_url}/v1beta/models/{model}:streamGenerateContent?alt=sse&key={api_key}"
+    async with httpx.AsyncClient(timeout=60) as client:
+        async with client.stream("POST", url,
+                                 headers={"content-type": "application/json"},
+                                 json=body) as resp:
+            async for line in resp.aiter_lines():
+                if not line.startswith("data:"):
+                    continue
+                data = line[5:].strip()
+                if data == "[DONE]":
+                    break
+                try:
+                    ev = json.loads(data)
+                    parts = ev.get("candidates", [{}])[0].get("content", {}).get("parts", [])
+                    for part in parts:
+                        text = part.get("text", "")
+                        if text:
+                            yield f"data: {json.dumps({'text': text})}\n\n"
+                except Exception:
+                    pass
+    yield "data: [DONE]\n\n"
 
 
 if __name__ == "__main__":

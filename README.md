@@ -2,7 +2,7 @@
 
 Your Bloomberg Terminal as a REST API. Query BDP, BDH, BDS, BQL, intraday data, and more from any browser -- with an AI assistant that writes the queries for you.
 
-Built on [blpapi](https://www.bloomberg.com/professional/support/api-library/) + [OpenBB](https://openbb.co) + [Claude](https://anthropic.com).
+Built on [blpapi](https://www.bloomberg.com/professional/support/api-library/) + [OpenBB](https://openbb.co). AI assistant supports [Claude](https://anthropic.com), [OpenAI](https://openai.com), and [Gemini](https://ai.google.dev) -- bring your own key.
 
 ---
 
@@ -60,7 +60,7 @@ Full playground on your phone. Sidebar becomes a slide-out drawer, tabs scroll h
 
 - **REST API wrapper** -- BDP, BDH, BDS, BQL, intraday bars/ticks, field search, security lookup, yield curves
 - **Interactive playground** -- categorized examples, parameter editor, one-click execution
-- **AI assistant** -- Claude-powered chatbot that builds Bloomberg API calls and Excel formulas from natural language
+- **AI assistant** -- chatbot that builds Bloomberg API calls and Excel formulas from natural language (Claude, GPT, Gemini -- bring your own key)
 - **Multiple views** -- JSON, sortable table, auto-detected charts (time series, bar, pie)
 - **Formula Builder** -- generates =BDP(), =BDH(), =BDS(), =BQL() with 108-field quick reference
 - **Excel Bridge** -- Power Query, VBA macro, TSV copy, CSV download
@@ -133,8 +133,13 @@ All configuration is via environment variables (or a `.env` file):
 | `OPENBB_PORT` | `6900` | OpenBB API port |
 | `SERVE_DIR` | `./` | Static file directory |
 | `ALLOWED_IPS` | `*` | Comma-separated IP whitelist, or `*` for all |
-| `ANTHROPIC_API_KEY` | | Required for AI chatbot |
-| `ANTHROPIC_MODEL` | `claude-sonnet-4-6` | Claude model for chatbot |
+| `AI_PROVIDER` | `anthropic` | Default AI provider (`anthropic`, `openai`, `google`) |
+| `AI_MODEL` | | Override default model for the provider |
+| `ANTHROPIC_API_KEY` | | API key for Claude |
+| `OPENAI_API_KEY` | | API key for OpenAI / compatible APIs |
+| `GOOGLE_API_KEY` | | API key for Google Gemini |
+
+The OpenAI provider works with any OpenAI-compatible API (Groq, Together, Mistral, etc.) -- set `OPENAI_BASE_URL` to point to your provider.
 
 ### Browser-Side Settings
 
@@ -142,7 +147,9 @@ Click the gear icon in the playground header to configure:
 - **Bloomberg API URL** -- where BDP/BDH/BDS/BQL requests go
 - **OpenBB API URL** -- where OpenBB requests go
 - **Display name** -- shown in the status bar
-- **Anthropic API key** -- saved to the server for chatbot use
+- **AI Provider** -- choose Anthropic (Claude), OpenAI (GPT), or Google (Gemini)
+- **Model** -- override the default model for your provider
+- **API Key** -- saved to the server per-provider for chatbot use
 
 Settings persist in `localStorage` per browser.
 
