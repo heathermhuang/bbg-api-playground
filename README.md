@@ -2,6 +2,23 @@
 
 A self-hosted web playground for the Bloomberg Terminal, wrapping **blpapi** as a REST API and combining it with [OpenBB](https://openbb.co) for a unified market data interface.
 
+![Bloomberg API Playground](docs/images/hero-playground.png)
+
+## Screenshots
+
+| Sortable Table View | AI Assistant (Claude) |
+|---|---|
+| ![Table](docs/images/table-view.png) | ![AI Chat](docs/images/ai-chat.png) |
+
+| Excel Formula Builder | Excel Bridge (Power Query) |
+|---|---|
+| ![Formula Builder](docs/images/formula-builder.png) | ![Excel Bridge](docs/images/excel-bridge.png) |
+
+<p align="center">
+  <img src="docs/images/mobile-responsive.png" alt="Mobile Responsive" width="250">
+  <br><em>Fully responsive on mobile</em>
+</p>
+
 ## Features
 
 - **REST API wrapper** for Bloomberg Terminal (`BDP`, `BDH`, `BDS`, `BQL`, intraday bars/ticks, field search, security lookup, yield curves)
