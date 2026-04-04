@@ -3,10 +3,10 @@ Bloomberg Terminal HTTP API wrapper
 Exposes BDP, BDH, BDS, intraday bars, field catalog, and AI chat via REST.
 """
 
-from fastapi import FastAPI, HTTPException, Query
+from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from typing import Optional, List
 import blpapi
 import datetime
@@ -15,6 +15,11 @@ import json
 import csv
 import io
 import re as _re
+import time
+import threading
+import logging
+
+logger = logging.getLogger("bbg_api")
 
 # Try loading .env file from the same directory as this script
 try:
@@ -23,11 +28,41 @@ try:
 except ImportError:
     pass
 
+# ── Docs toggle (disable in production with ENABLE_DOCS=false) ───────────────
+_enable_docs = os.environ.get("ENABLE_DOCS", "true").lower() in ("1", "true", "yes")
+
 app = FastAPI(
     title="Bloomberg Terminal API",
     description="REST wrapper for Bloomberg Terminal (blpapi). BDP, BDH, BDS, intraday bars, field catalog, AI assistant.",
     version="1.1.0",
+    docs_url="/docs" if _enable_docs else None,
+    redoc_url="/redoc" if _enable_docs else None,
+    openapi_url="/openapi.json" if _enable_docs else None,
 )
+
+# ── Rate limiter (in-memory, per-IP) ─────────────────────────────────────────
+class _RateLimiter:
+    def __init__(self):
+        self._hits: dict[str, list[float]] = {}
+        self._lock = threading.Lock()
+
+    def check(self, ip: str, limit: int, window_s: int = 60) -> bool:
+        """Return True if under limit, False if rate-limited."""
+        now = time.time()
+        cutoff = now - window_s
+        with self._lock:
+            hits = self._hits.get(ip, [])
+            hits = [t for t in hits if t > cutoff]
+            if len(hits) >= limit:
+                self._hits[ip] = hits
+                return False
+            hits.append(now)
+            self._hits[ip] = hits
+            return True
+
+_rate = _RateLimiter()
+_BBG_RATE_LIMIT = int(os.environ.get("BBG_RATE_LIMIT", "60"))   # per minute
+_CHAT_RATE_LIMIT = int(os.environ.get("CHAT_RATE_LIMIT", "20"))  # per minute
 
 _CORS_ORIGINS = os.environ.get("CORS_ORIGINS", "http://127.0.0.1:*,http://localhost:*").split(",")
 app.add_middleware(
@@ -36,6 +71,29 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.middleware("http")
+async def log_requests(request: Request, call_next):
+    """Log every request with client IP, method, path, and response code."""
+    start = time.time()
+    client_ip = request.client.host if request.client else "unknown"
+    response = await call_next(request)
+    elapsed = int((time.time() - start) * 1000)
+    logger.info(f"{client_ip} {request.method} {request.url.path} -> {response.status_code} ({elapsed}ms)")
+    return response
+
+def _get_client_ip(request: Request) -> str:
+    return request.client.host if request.client else "unknown"
+
+def _check_bbg_rate(request: Request):
+    ip = _get_client_ip(request)
+    if not _rate.check(ip, _BBG_RATE_LIMIT):
+        raise HTTPException(429, detail="Rate limit exceeded. Try again in a minute.")
+
+def _check_chat_rate(request: Request):
+    ip = _get_client_ip(request)
+    if not _rate.check(ip, _CHAT_RATE_LIMIT):
+        raise HTTPException(429, detail="Chat rate limit exceeded. Try again in a minute.")
 
 BBG_HOST = os.environ.get("BBG_HOST", "127.0.0.1")
 BBG_PORT = int(os.environ.get("BBG_PORT", "8194"))
@@ -153,6 +211,16 @@ def _get_str(el, name):
 
 # ── Health ────────────────────────────────────────────────────────────────────
 
+def _safe_error(e: Exception) -> str:
+    """Truncate error messages to avoid leaking internal details."""
+    msg = str(e)
+    if len(msg) > 200:
+        msg = msg[:200] + "..."
+    # Strip file paths
+    msg = _re.sub(r'[A-Z]:\\[^\s"]+', '[path]', msg)
+    msg = _re.sub(r'/[^\s"]+\.py', '[path]', msg)
+    return msg
+
 @app.get("/health", tags=["System"])
 def health():
     try:
@@ -160,19 +228,21 @@ def health():
         session.stop()
         return {"status": "ok", "bloomberg_port": BBG_PORT, "blpapi_version": blpapi.version()}
     except Exception as e:
-        raise HTTPException(503, detail=str(e))
+        raise HTTPException(503, detail="Bloomberg Terminal is not reachable")
 
 
 # ── BDP ───────────────────────────────────────────────────────────────────────
 
 @app.get("/bdp", tags=["Reference Data"])
 def bdp(
+    request: Request,
     securities: str = Query(..., description="Comma-separated tickers, e.g. AAPL US Equity,MSFT US Equity"),
     fields: str = Query(..., description="Comma-separated fields, e.g. PX_LAST,NAME,MARKET_CAP"),
     overrides: Optional[str] = Query(None, description="Semicolon-separated key=value overrides, e.g. PRICING_SOURCE=BGN"),
     format: Optional[str] = Query(None, description="Response format: json (default) or csv"),
 ):
     """Bloomberg Data Point — current/reference field values for one or more securities."""
+    _check_bbg_rate(request)
     secs = [s.strip() for s in securities.split(",") if s.strip()]
     flds = [f.strip() for f in fields.split(",") if f.strip()]
     session = _get_session()
@@ -217,7 +287,7 @@ def bdp(
             return _rows_to_csv(results, "bdp_data.csv")
         return {"results": results}
     except Exception as e:
-        raise HTTPException(500, detail=str(e))
+        raise HTTPException(500, detail=_safe_error(e))
     finally:
         session.stop()
 
@@ -226,6 +296,7 @@ def bdp(
 
 @app.get("/bdh", tags=["Historical Data"])
 def bdh(
+    request: Request,
     securities: str = Query(..., description="Comma-separated tickers"),
     fields: str = Query("PX_LAST", description="Comma-separated fields"),
     start_date: str = Query(..., description="YYYY-MM-DD or YYYYMMDD"),
@@ -236,6 +307,7 @@ def bdh(
     format: Optional[str] = Query(None, description="Response format: json (default) or csv"),
 ):
     """Bloomberg Data History — OHLCV and field history for one or more securities."""
+    _check_bbg_rate(request)
     secs = [s.strip() for s in securities.split(",") if s.strip()]
     flds = [f.strip() for f in fields.split(",") if f.strip()]
     end = (end_date or datetime.date.today().strftime("%Y%m%d")).replace("-", "")
@@ -274,7 +346,7 @@ def bdh(
             return {"security": secs[0], "results": list(results.values())[0] if results else []}
         return {"results": results}
     except Exception as e:
-        raise HTTPException(500, detail=str(e))
+        raise HTTPException(500, detail=_safe_error(e))
     finally:
         session.stop()
 
@@ -283,12 +355,14 @@ def bdh(
 
 @app.get("/bds", tags=["Bulk Data"])
 def bds(
+    request: Request,
     security: str = Query(..., description="Single ticker, e.g. SPX Index"),
     field: str = Query(..., description="Bulk field, e.g. INDX_MEMBERS, DVD_HIST_ALL"),
     overrides: Optional[str] = Query(None, description="Semicolon-separated key=value overrides"),
     format: Optional[str] = Query(None, description="Response format: json (default) or csv"),
 ):
     """Bloomberg Data Set — bulk/array fields like index members, dividend history."""
+    _check_bbg_rate(request)
     session = _get_session()
     try:
         svc = _open_service(session, "//blp/refdata")
@@ -319,7 +393,7 @@ def bds(
                 return {"security": security, "field": field, "count": 0, "results": []}
         return {"security": security, "field": field, "count": 0, "results": []}
     except Exception as e:
-        raise HTTPException(500, detail=str(e))
+        raise HTTPException(500, detail=_safe_error(e))
     finally:
         session.stop()
 
@@ -328,6 +402,7 @@ def bds(
 
 @app.get("/intraday/bars", tags=["Intraday"])
 def intraday_bars(
+    request: Request,
     security: str = Query(..., description="Ticker, e.g. AAPL US Equity"),
     event_type: str = Query("TRADE", description="TRADE, BID, ASK, BID_BEST, ASK_BEST"),
     interval: int = Query(5, description="Bar interval in minutes (1–1440)", ge=1, le=1440),
@@ -335,6 +410,7 @@ def intraday_bars(
     end_datetime: Optional[str] = Query(None, description="ISO datetime (default: now UTC)"),
 ):
     """Intraday OHLCV bars. Requires Bloomberg intraday data subscription."""
+    _check_bbg_rate(request)
     end = end_datetime or datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S")
     session = _get_session()
     try:
@@ -355,7 +431,7 @@ def intraday_bars(
                 pass
         return {"security": security, "interval_min": interval, "count": len(rows), "results": rows}
     except Exception as e:
-        raise HTTPException(500, detail=str(e))
+        raise HTTPException(500, detail=_safe_error(e))
     finally:
         session.stop()
 
@@ -364,6 +440,7 @@ def intraday_bars(
 
 @app.get("/intraday/ticks", tags=["Intraday"])
 def intraday_ticks(
+    request: Request,
     security: str = Query(..., description="Ticker, e.g. AAPL US Equity"),
     event_types: str = Query("TRADE", description="Comma-separated event types: TRADE,BID,ASK"),
     start_datetime: str = Query(..., description="ISO datetime: 2026-04-03T09:30:00"),
@@ -371,6 +448,7 @@ def intraday_ticks(
     max_ticks: int = Query(500, le=5000),
 ):
     """Raw tick data for a security."""
+    _check_bbg_rate(request)
     end = end_datetime or datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%S")
     session = _get_session()
     try:
@@ -392,7 +470,7 @@ def intraday_ticks(
                 pass
         return {"security": security, "count": len(rows), "results": rows}
     except Exception as e:
-        raise HTTPException(500, detail=str(e))
+        raise HTTPException(500, detail=_safe_error(e))
     finally:
         session.stop()
 
@@ -401,10 +479,12 @@ def intraday_ticks(
 
 @app.get("/fields/search", tags=["Field Catalog"])
 def field_search(
+    request: Request,
     query: str = Query(..., description="Search term, e.g. 'earnings per share'"),
     max_results: int = Query(20, le=100),
 ):
     """Search Bloomberg field catalog by keyword (like FLDS <GO>)."""
+    _check_bbg_rate(request)
     session = _get_session()
     try:
         svc = _open_service(session, "//blp/apiflds")
@@ -425,7 +505,7 @@ def field_search(
             return {"results": [], "note": "//blp/apiflds returned no results. This service may require a Bloomberg Field Catalog (FLDS) subscription. Use the Terminal: FLDS <GO>"}
         return {"results": results}
     except Exception as e:
-        raise HTTPException(500, detail=str(e))
+        raise HTTPException(500, detail=_safe_error(e))
     finally:
         session.stop()
 
@@ -434,9 +514,11 @@ def field_search(
 
 @app.get("/fields/info", tags=["Field Catalog"])
 def field_info(
+    request: Request,
     fields: str = Query(..., description="Comma-separated field mnemonics, e.g. PX_LAST,PE_RATIO"),
 ):
     """Get metadata for specific Bloomberg fields."""
+    _check_bbg_rate(request)
     flds = [f.strip() for f in fields.split(",") if f.strip()]
     session = _get_session()
     try:
@@ -457,7 +539,7 @@ def field_info(
             return {"results": [], "note": "//blp/apiflds returned no results. This service may require a Bloomberg Field Catalog subscription. Use the Terminal: FLDS <GO>"}
         return {"results": results}
     except Exception as e:
-        raise HTTPException(500, detail=str(e))
+        raise HTTPException(500, detail=_safe_error(e))
     finally:
         session.stop()
 
@@ -466,12 +548,13 @@ def field_info(
 
 @app.get("/security/lookup", tags=["Reference Data"])
 def security_lookup(
+    request: Request,
     query: str = Query(..., description="Search string, e.g. 'Apple'"),
     max_results: int = Query(10, le=50),
     yellow_key_filter: Optional[str] = Query(None, description="Equity, Bond, Curncy, Index, Comdty, Govt, Mtge, Muni"),
 ):
     """Search for securities by name or identifier (like SECF <GO>)."""
-    # yellowKeyFilter integer enum: NONE=0 CMDT=1 EQUITY=2 MUNI=3 PFD=4 GOVT=6 CORP=7 INDEX=8 CURR=9 MTGE=10
+    _check_bbg_rate(request)
     YK = {'EQUITY':2,'GOVT':6,'BOND':7,'CORP':7,'INDEX':8,'CURNCY':9,'CURR':9,
           'COMDTY':1,'CMDT':1,'MTGE':10,'MUNI':3,'PFD':4}
     session = _get_session()
@@ -497,7 +580,7 @@ def security_lookup(
                 pass
         return {"results": results}
     except Exception as e:
-        raise HTTPException(500, detail=str(e))
+        raise HTTPException(500, detail=_safe_error(e))
     finally:
         session.stop()
 
@@ -561,6 +644,7 @@ def _bql_overrides_to_bdp(overrides: dict) -> str:
 
 @app.get("/bql", tags=["BQL"])
 def bql_query(
+    request: Request,
     query: str = Query(..., description=(
         "BQL expression. e.g. "
         "get(NUMBER_OF_VEHICLES_SOLD(FPT=Q,FPO=0Q,ACT_EST_MAPPING=PRECISE,FS=MRC)) "
@@ -571,6 +655,7 @@ def bql_query(
     Bloomberg Query Language — runs via //blp/bql if licensed, otherwise falls back
     to BDP with equivalent fiscal period overrides. Use for KPI/operational data.
     """
+    _check_bbg_rate(request)
     field, overrides, securities = _parse_bql(query)
 
     # ── Attempt 1: native //blp/bql service ──────────────────────────────────
@@ -613,7 +698,7 @@ def bql_query(
                     "count": len(results), "results": results}
         except Exception as e:
             session.stop()
-            raise HTTPException(500, detail=str(e))
+            raise HTTPException(500, detail=_safe_error(e))
 
     # BQL service not available — fall through to BDP
     session.stop()
@@ -623,6 +708,7 @@ def bql_query(
         bdp_overrides = _bql_overrides_to_bdp(overrides) or None
         try:
             result = bdp(
+                request=request,
                 securities=",".join(securities),
                 fields=field,
                 overrides=bdp_overrides,
@@ -692,15 +778,17 @@ CURVE_TICKERS = {
 
 @app.get("/curve", tags=["Fixed Income"])
 def curve(
+    request: Request,
     curve_id: str = Query("USD", description="USD, EUR, GBP, JPY"),
     date: Optional[str] = Query(None, description="YYYYMMDD (default: today)"),
 ):
     """Bloomberg yield curve — sovereign rates by tenor."""
+    _check_bbg_rate(request)
     tickers = CURVE_TICKERS.get(curve_id.upper())
     if not tickers:
         raise HTTPException(400, detail=f"Unknown curve_id '{curve_id}'. Available: {list(CURVE_TICKERS)}")
     ovr = f"REFERENCE_DATE={date.replace('-','')}" if date else None
-    return bdp(securities=",".join(tickers), fields="PX_LAST,SECURITY_DES", overrides=ovr)
+    return bdp(request=request, securities=",".join(tickers), fields="PX_LAST,SECURITY_DES", overrides=ovr)
 
 
 # ── AI Chat ───────────────────────────────────────────────────────────────────
@@ -743,6 +831,11 @@ def _save_cfg(data):
     cfg_path = os.path.join(_CFG_DIR, "config.json")
     with open(cfg_path, "w") as f:
         json.dump(data, f)
+    # Restrict permissions to owner-only (ignored on Windows)
+    try:
+        os.chmod(cfg_path, 0o600)
+    except OSError:
+        pass
 
 def _get_api_key(provider: str) -> str:
     """Get API key for provider: env var → config file."""
@@ -766,7 +859,7 @@ def set_config(req: ConfigRequest):
         _save_cfg(existing)
         return {"status": "saved"}
     except Exception as e:
-        raise HTTPException(500, detail=str(e))
+        raise HTTPException(500, detail=_safe_error(e))
 
 @app.get("/config", tags=["System"])
 def get_config():
@@ -794,15 +887,31 @@ class ChatMessage(BaseModel):
     role: str
     content: str
 
+    @field_validator("content")
+    @classmethod
+    def content_max_length(cls, v):
+        if len(v) > 10000:
+            raise ValueError("Message content exceeds 10,000 character limit")
+        return v
+
     @property
     def safe_role(self):
         """Only allow 'user' and 'assistant' roles to prevent prompt injection."""
         return self.role if self.role in ("user", "assistant") else "user"
 
+MAX_CHAT_MESSAGES = 30  # Server-side cap on conversation length
+
 class ChatRequest(BaseModel):
     messages: List[ChatMessage]
     provider: Optional[str] = None   # anthropic | openai | google
     model: Optional[str] = None      # override default model
+
+    @field_validator("messages")
+    @classmethod
+    def limit_messages(cls, v):
+        if len(v) > MAX_CHAT_MESSAGES:
+            v = v[-MAX_CHAT_MESSAGES:]
+        return v
 
 BBG_BASE_URL = os.environ.get("BBG_BASE_URL", "")
 OPENBB_BASE_URL = os.environ.get("OPENBB_BASE_URL", "")
@@ -1074,9 +1183,10 @@ CHAT_SYSTEM = (CHAT_SYSTEM
 )
 
 @app.post("/chat", tags=["AI Assistant"])
-async def chat(req: ChatRequest):
+async def chat(request: Request, req: ChatRequest):
     """AI assistant that helps construct Bloomberg and OpenBB API calls.
     Supports Anthropic, OpenAI, and Google Gemini providers."""
+    _check_chat_rate(request)
     import httpx
 
     provider = (req.provider or os.environ.get("AI_PROVIDER", "anthropic")).lower()
