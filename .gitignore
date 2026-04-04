@@ -12,6 +12,7 @@ openbb-tunnel.yml
 node_modules/
 *.bat
 screenshots/
+docs/
 *.credentials
 test_chat.py
 test_chat_urls.py
