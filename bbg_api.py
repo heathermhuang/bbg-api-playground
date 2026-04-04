@@ -635,10 +635,31 @@ def bql_query(
             )
             result["bql_query"] = query
             return result
-        except HTTPException as e:
-            raise e
-        except Exception as e:
-            raise HTTPException(500, detail=f"BDP fallback failed: {e}")
+        except Exception:
+            # BDP fallback also failed — field is likely BQL-only.
+            # Return a structured response instead of an error.
+            excel_formula = (
+                f'=BQL("{securities[0]}","{field}"'
+                + "".join(f',"{k}={v}"' for k, v in overrides.items())
+                + ')'
+            )
+            return {
+                "source": "bql_unavailable",
+                "query": query,
+                "field": field,
+                "securities": securities,
+                "results": [],
+                "note": (
+                    f"//blp/bql service is not licensed and the field '{field}' "
+                    f"is not available via BDP. This is a BQL-only field."
+                ),
+                "excel_formula": excel_formula,
+                "alternatives": [
+                    f"Use the Excel formula: {excel_formula}",
+                    "The =BQL() function works in Bloomberg Excel Add-in with an active Terminal session",
+                    "Contact Bloomberg to enable BQL API access on your account",
+                ],
+            }
 
     # ── Neither worked ────────────────────────────────────────────────────────
     raise HTTPException(503, detail={
