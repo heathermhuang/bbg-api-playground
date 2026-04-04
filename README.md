@@ -1,36 +1,73 @@
 # Bloomberg Terminal API Playground
 
-A self-hosted web playground for the Bloomberg Terminal, wrapping **blpapi** as a REST API and combining it with [OpenBB](https://openbb.co) for a unified market data interface.
+Your Bloomberg Terminal as a REST API. Query BDP, BDH, BDS, BQL, intraday data, and more from any browser -- with an AI assistant that writes the queries for you.
+
+Built on [blpapi](https://www.bloomberg.com/professional/support/api-library/) + [OpenBB](https://openbb.co) + [Claude](https://anthropic.com).
+
+---
+
+### The Playground
+
+Point, click, query. Every Bloomberg endpoint in one interface with syntax-highlighted JSON, sortable tables, and auto-generated charts. The sidebar organizes 30+ example requests by category so you never start from scratch.
 
 ![Bloomberg API Playground](docs/images/hero-playground.png)
 
-## Screenshots
+---
 
-| Sortable Table View | AI Assistant (Claude) |
-|---|---|
-| ![Table](docs/images/table-view.png) | ![AI Chat](docs/images/ai-chat.png) |
+### Instant Data Tables
 
-| Excel Formula Builder | Excel Bridge (Power Query) |
-|---|---|
-| ![Formula Builder](docs/images/formula-builder.png) | ![Excel Bridge](docs/images/excel-bridge.png) |
+Responses automatically render as sortable, formatted tables. Green/red color coding on percentage changes. Click any column header to sort. Supports multi-security, multi-field queries out of the box.
+
+![Sortable Table View](docs/images/table-view.png)
+
+---
+
+### AI That Speaks Bloomberg
+
+Ask in plain English, get the exact API call + Excel formula. The Claude-powered assistant knows every Bloomberg field, BQL syntax, and the difference between what works via API vs. what needs the Excel Add-in. Hit the Run button to execute directly.
+
+![AI Chat Assistant](docs/images/ai-chat.png)
+
+---
+
+### Excel Formula Builder
+
+108 Bloomberg fields across 9 categories. Pick a security, pick a field, get the exact =BDP(), =BDH(), =BDS(), or =BQL() formula ready to paste. The quick reference shows which fields work via API and which are Excel-only.
+
+![Formula Builder](docs/images/formula-builder.png)
+
+---
+
+### Excel Bridge
+
+Get data from the API straight into Excel. Auto-generated Power Query M code, VBA macros with MSXML2.XMLHTTP60, tab-separated copy for quick paste, and CSV download. Data refreshes with one click in Excel.
+
+![Excel Bridge](docs/images/excel-bridge.png)
+
+---
+
+### Mobile Ready
+
+Full playground on your phone. Sidebar becomes a slide-out drawer, tabs scroll horizontally, chat goes full-screen. Same functionality, smaller screen.
 
 <p align="center">
-  <img src="docs/images/mobile-responsive.png" alt="Mobile Responsive" width="250">
-  <br><em>Fully responsive on mobile</em>
+  <img src="docs/images/mobile-responsive.png" alt="Mobile Responsive" width="280">
 </p>
+
+---
 
 ## Features
 
-- **REST API wrapper** for Bloomberg Terminal (`BDP`, `BDH`, `BDS`, `BQL`, intraday bars/ticks, field search, security lookup, yield curves)
-- **Interactive playground UI** with categorized example requests, parameter editor, and one-click execution
-- **AI assistant** (Claude-powered chatbot) that builds Bloomberg API calls and Excel formulas from natural language
-- **Response views** -- JSON, sortable table, and auto-detected charts (time series, bar, pie)
-- **Excel Formula Builder** -- generates `=BDP()`, `=BDH()`, `=BDS()`, `=BQL()` formulas with a 108-field quick reference
-- **Excel Bridge** -- Power Query M code, VBA macro, TSV copy, and CSV download to get data into Excel
-- **OpenBB integration** -- proxy routes to an OpenBB API for equities, fixed income, FX, economy, and derivatives data
-- **Mobile responsive** -- sidebar drawer, scrollable tabs, and full-screen chat on small screens
-- **Configurable endpoints** -- set Bloomberg API and OpenBB API URLs per-browser via the settings modal
-- **CSV export** -- append `?format=csv` to any `/bdp`, `/bdh`, or `/bds` endpoint
+- **REST API wrapper** -- BDP, BDH, BDS, BQL, intraday bars/ticks, field search, security lookup, yield curves
+- **Interactive playground** -- categorized examples, parameter editor, one-click execution
+- **AI assistant** -- Claude-powered chatbot that builds Bloomberg API calls and Excel formulas from natural language
+- **Multiple views** -- JSON, sortable table, auto-detected charts (time series, bar, pie)
+- **Formula Builder** -- generates =BDP(), =BDH(), =BDS(), =BQL() with 108-field quick reference
+- **Excel Bridge** -- Power Query, VBA macro, TSV copy, CSV download
+- **OpenBB integration** -- equities, fixed income, FX, economy, derivatives via OpenBB Platform
+- **Mobile responsive** -- sidebar drawer, scrollable tabs, full-screen chat
+- **Configurable endpoints** -- set API URLs per-browser via settings modal
+- **CSV export** -- append `?format=csv` to any BDP/BDH/BDS endpoint
 
 ## Prerequisites
 
@@ -42,8 +79,8 @@ A self-hosted web playground for the Bloomberg Terminal, wrapping **blpapi** as 
 
 ```bash
 # Clone the repo
-git clone https://github.com/your-org/bloomberg-playground.git
-cd bloomberg-playground
+git clone https://github.com/heathermhuang/bbg-api-playground.git
+cd bbg-api-playground
 
 # Copy and edit environment config
 cp .env.example .env
