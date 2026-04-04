@@ -29,9 +29,10 @@ app = FastAPI(
     version="1.1.0",
 )
 
+_CORS_ORIGINS = os.environ.get("CORS_ORIGINS", "http://127.0.0.1:*,http://localhost:*").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origin_regex=r"^https?://(127\.0\.0\.1|localhost)(:\d+)?$",
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -511,7 +512,8 @@ def _parse_bql(query: str):
     """
     field, overrides, securities = None, {}, []
     # Extract field and its overrides from get(FIELD(K=V,...))
-    m = _re.search(r'get\((\w+)\(([^)]*)\)\)', query, _re.IGNORECASE)
+    # Use balanced matching to handle nested parens like range(-3Q,0Q)
+    m = _re.search(r'get\((\w+)\((.+)\)\s*\)\s*for', query, _re.IGNORECASE)
     if m:
         field = m.group(1)
         for kv in m.group(2).split(','):
@@ -1122,6 +1124,12 @@ async def _stream_anthropic(api_key: str, model: str, messages: list):
     async with httpx.AsyncClient(timeout=60) as client:
         async with client.stream("POST", f"{base_url}/v1/messages",
                                  headers=headers, json=body) as resp:
+            if resp.status_code != 200:
+                body_bytes = await resp.aread()
+                err = body_bytes.decode(errors="replace")[:500]
+                yield f"data: {json.dumps({'text': f'[Anthropic API error {resp.status_code}]: {err}'})}\n\n"
+                yield "data: [DONE]\n\n"
+                return
             async for line in resp.aiter_lines():
                 if not line.startswith("data:"):
                     continue
@@ -1157,6 +1165,12 @@ async def _stream_openai(api_key: str, model: str, messages: list):
     async with httpx.AsyncClient(timeout=60) as client:
         async with client.stream("POST", f"{base_url}/v1/chat/completions",
                                  headers=headers, json=body) as resp:
+            if resp.status_code != 200:
+                body_bytes = await resp.aread()
+                err = body_bytes.decode(errors="replace")[:500]
+                yield f"data: {json.dumps({'text': f'[OpenAI API error {resp.status_code}]: {err}'})}\n\n"
+                yield "data: [DONE]\n\n"
+                return
             async for line in resp.aiter_lines():
                 if not line.startswith("data:"):
                     continue
@@ -1190,11 +1204,21 @@ async def _stream_google(api_key: str, model: str, messages: list):
         "systemInstruction": {"parts": [{"text": CHAT_SYSTEM}]},
         "generationConfig": {"maxOutputTokens": 1024},
     }
-    url = f"{base_url}/v1beta/models/{model}:streamGenerateContent?alt=sse&key={api_key}"
+    url = f"{base_url}/v1beta/models/{model}:streamGenerateContent?alt=sse"
+    headers = {
+        "content-type": "application/json",
+        "x-goog-api-key": api_key,
+    }
     async with httpx.AsyncClient(timeout=60) as client:
         async with client.stream("POST", url,
-                                 headers={"content-type": "application/json"},
+                                 headers=headers,
                                  json=body) as resp:
+            if resp.status_code != 200:
+                body_bytes = await resp.aread()
+                err = body_bytes.decode(errors="replace")[:500]
+                yield f"data: {json.dumps({'text': f'[Google API error {resp.status_code}]: {err}'})}\n\n"
+                yield "data: [DONE]\n\n"
+                return
             async for line in resp.aiter_lines():
                 if not line.startswith("data:"):
                     continue

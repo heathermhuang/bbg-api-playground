@@ -264,9 +264,10 @@
     /* API toggle smaller */
     .api-btn { padding: 3px 8px; font-size: 10px; }
 
-    /* Chat panel: full-screen overlay when open */
-    #chat-panel { position: fixed; z-index: 150; inset: 0; width: 100% !important; min-width: 0; border: none; }
+    /* Chat panel: full-screen overlay when open, collapsed by default on mobile */
+    #chat-panel { position: fixed; z-index: 150; inset: 0; width: 100% !important; min-width: 0; border: none; background: var(--bg2); }
     #chat-panel.collapsed { display: none; }
+    #chat-panel:not(.collapsed) { display: flex; }
 
     /* Main area fills full width */
     #layout { flex-direction: column; }
@@ -1470,12 +1471,12 @@ function sortTable(col) {
   if (!Array.isArray(rows)) return;
   sortDir = sortCol === col ? -sortDir : 1;
   sortCol = col;
-  rows.sort((a, b) => {
+  const sorted = [...rows].sort((a, b) => {
     const av = a[col], bv = b[col];
     if (av === null) return 1; if (bv === null) return -1;
     return sortDir * (av < bv ? -1 : av > bv ? 1 : 0);
   });
-  renderTable({ results: rows });
+  renderTable({ results: sorted });
 }
 
 // ─── Chart renderer ───────────────────────────────────────────────────────────
@@ -2027,9 +2028,7 @@ function _buildPowerQuery(path, u, jsonUrl) {
   const esc = s => s.replace(/"/g, '""');
   if (path === '/bdp' || path === '/bdh' || path === '/bds' || path === '/bql') {
     // Determine result key
-    const resultKey = path === '/bds' ? 'results'
-                    : path === '/bql' ? 'rows'
-                    : 'results';
+    const resultKey = 'results';
     return `let
     Source  = Json.Document(Web.Contents("${esc(jsonUrl)}")),
     rows    = Source[${resultKey}],
@@ -2237,6 +2236,7 @@ document.addEventListener('keydown', e => {
 // Use same-origin for /config and /chat when on the public playground (avoids CORS preflight issues)
 const BBG_CHAT_BASE = _config.bbg_url || '';
 
+const MAX_CHAT_HISTORY = 20;  // Keep last N messages to avoid exceeding provider context limits
 let chatHistory = [];
 let chatBusy = false;
 
@@ -2484,6 +2484,8 @@ async function sendChat() {
       bubble.appendChild(xlBtn);
     }
     chatHistory.push({ role: 'assistant', content: fullText });
+    // Trim history to avoid exceeding provider context window
+    if (chatHistory.length > MAX_CHAT_HISTORY) chatHistory = chatHistory.slice(-MAX_CHAT_HISTORY);
   } catch (e) {
     const safeMsg = (e.message || 'Unknown error').replace(/</g,'&lt;').replace(/>/g,'&gt;');
     bubble.innerHTML = `<span style="color:var(--red)">Error: ${safeMsg}</span>`;
@@ -2610,8 +2612,18 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSetting
 // ─── Init ─────────────────────────────────────────────────────────────────────
 buildFilterTags();
 buildSidebar();
+// Collapse chat on mobile so main playground is visible first
+if (window.innerWidth <= 768) {
+  document.getElementById('chat-panel').classList.add('collapsed');
+  const btn = document.getElementById('chat-toggle');
+  if (btn) btn.classList.remove('active');
+}
 checkStatus();
-setInterval(checkStatus, 15000);
+let _statusInterval = setInterval(checkStatus, 15000);
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) { clearInterval(_statusInterval); _statusInterval = null; }
+  else { checkStatus(); _statusInterval = setInterval(checkStatus, 15000); }
+});
 
 // Resize chart when window resizes
 window.addEventListener('resize', () => { if (lastResponse) renderChart(lastResponse); });

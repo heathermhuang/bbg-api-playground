@@ -32,7 +32,11 @@ class PlaygroundHandler(BaseHTTPRequestHandler):
     def _check_ip(self):
         if ALLOWED_IPS is None:  # "*" — allow all
             return True
-        client_ip = self.headers.get("CF-Connecting-IP") or self.client_address[0]
+        # Only trust CF-Connecting-IP if TRUST_CF_IP is explicitly enabled
+        if os.environ.get("TRUST_CF_IP", "").lower() in ("1", "true", "yes"):
+            client_ip = self.headers.get("CF-Connecting-IP") or self.client_address[0]
+        else:
+            client_ip = self.client_address[0]
         if client_ip not in ALLOWED_IPS:
             self.send_response(403)
             self.end_headers()
