@@ -44,6 +44,10 @@
   #header-spacer { flex: 1; }
   .header-btn { background: var(--bg4); border: 1px solid var(--border2); color: var(--text2); padding: 4px 10px; border-radius: 4px; cursor: pointer; font-size: 11px; font-family: var(--mono); }
   .header-btn:hover { border-color: var(--amber); color: var(--amber); }
+  #settings-btn { background: var(--amber); color: #000; border: none; padding: 4px 12px; border-radius: 4px; cursor: pointer; font-size: 11px; font-family: var(--mono); font-weight: 700; letter-spacing: 0.5px; }
+  #settings-btn:hover { background: #e6a800; }
+  .header-link { color: var(--text3); font-size: 11px; font-family: var(--mono); text-decoration: none; }
+  .header-link:hover { color: var(--amber); }
 
   /* Layout */
   #layout { display: flex; flex: 1; overflow: hidden; }
@@ -318,6 +322,7 @@
 <div id="header">
   <button id="mobile-menu-btn" aria-label="Toggle navigation menu" onclick="document.body.classList.toggle('sidebar-open')" style="display:none;background:none;border:1px solid var(--border2);color:var(--amber);font-size:16px;padding:6px 10px;border-radius:4px;cursor:pointer;font-family:var(--mono);">&#9776;</button>
   <div class="logo">BLOOMBERG <span>// API PLAYGROUND</span></div>
+  <a href="https://github.com/heathermhuang/bbg-api-playground" target="_blank" rel="noopener" class="header-link" title="GitHub Repository">GitHub</a>
   <div id="api-toggle">
     <button class="api-btn active" id="btn-bbg" onclick="switchApi('bbg')">BBG Terminal</button>
     <button class="api-btn" id="btn-openbb" onclick="switchApi('openbb')">OpenBB</button>
@@ -328,7 +333,7 @@
   <button class="header-btn" onclick="openDocs()">API Docs</button>
   <button class="header-btn" onclick="clearHistory()">Clear</button>
   <button id="chat-toggle" class="active" onclick="toggleChat()">◈ AI Assistant</button>
-  <button class="header-btn" onclick="openSettings()" title="API Keys">⚙</button>
+  <button id="settings-btn" onclick="openSettings()" title="Settings & API Keys">⚙ Settings</button>
 </div>
 
 <!-- Settings modal -->
@@ -376,12 +381,82 @@
     </div>
     <div id="settings-status" style="font-size:10px;color:var(--text3);min-height:14px;margin-bottom:14px;padding-left:108px"></div>
 
+    <div style="color:var(--amber);font-size:10px;letter-spacing:1px;font-weight:700;margin-bottom:8px;padding-bottom:4px;border-bottom:1px solid var(--border2)">DATA PROVIDER KEYS <span style="color:var(--text3);font-weight:400">(OpenBB)</span></div>
+    <div style="color:var(--text3);font-size:10px;margin-bottom:10px">Optional. Required for premium OpenBB data providers. Keys are saved to browser localStorage.</div>
+    <div style="display:flex;gap:8px;margin-bottom:6px;align-items:center">
+      <label style="color:var(--text2);font-size:10px;min-width:100px">FMP Key</label>
+      <input id="settings-fmp-key" type="password" placeholder="Your financialmodelingprep.com API key"
+        style="flex:1;background:var(--bg3);border:1px solid var(--border2);color:var(--text);padding:6px 8px;border-radius:4px;font-family:var(--mono);font-size:11px;outline:none">
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:6px;align-items:center">
+      <label style="color:var(--text2);font-size:10px;min-width:100px">FRED Key</label>
+      <input id="settings-fred-key" type="password" placeholder="Your FRED API key (api.stlouisfed.org)"
+        style="flex:1;background:var(--bg3);border:1px solid var(--border2);color:var(--text);padding:6px 8px;border-radius:4px;font-family:var(--mono);font-size:11px;outline:none">
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:6px;align-items:center">
+      <label style="color:var(--text2);font-size:10px;min-width:100px">Polygon Key</label>
+      <input id="settings-polygon-key" type="password" placeholder="Your polygon.io API key"
+        style="flex:1;background:var(--bg3);border:1px solid var(--border2);color:var(--text);padding:6px 8px;border-radius:4px;font-family:var(--mono);font-size:11px;outline:none">
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:6px;align-items:center">
+      <label style="color:var(--text2);font-size:10px;min-width:100px">Intrinio Key</label>
+      <input id="settings-intrinio-key" type="password" placeholder="Your intrinio.com API key"
+        style="flex:1;background:var(--bg3);border:1px solid var(--border2);color:var(--text);padding:6px 8px;border-radius:4px;font-family:var(--mono);font-size:11px;outline:none">
+    </div>
+    <div style="display:flex;gap:8px;margin-bottom:14px;align-items:center">
+      <label style="color:var(--text2);font-size:10px;min-width:100px">Alpha Vantage</label>
+      <input id="settings-alphavantage-key" type="password" placeholder="Your alphavantage.co API key"
+        style="flex:1;background:var(--bg3);border:1px solid var(--border2);color:var(--text);padding:6px 8px;border-radius:4px;font-family:var(--mono);font-size:11px;outline:none">
+    </div>
+
     <div style="display:flex;gap:8px;justify-content:space-between;align-items:center">
       <button onclick="resetSettings()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-family:var(--mono);font-size:10px;text-decoration:underline">Reset defaults</button>
       <div style="display:flex;gap:8px;">
         <button onclick="closeSettings()" style="background:var(--bg4);border:1px solid var(--border2);color:var(--text2);padding:6px 14px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:12px">Cancel</button>
         <button onclick="saveSettings()" style="background:var(--amber);color:#000;border:none;padding:6px 18px;border-radius:4px;cursor:pointer;font-family:var(--mono);font-size:12px;font-weight:700">Save</button>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- Legal modal -->
+<div id="legal-modal" role="dialog" aria-modal="true" aria-label="Legal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.7);z-index:1001;overflow-y:auto">
+  <div style="background:var(--bg2);border:1px solid var(--border2);border-radius:8px;padding:24px 28px;width:640px;max-width:95vw;font-family:var(--mono);margin:40px auto;max-height:85vh;overflow-y:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div style="color:var(--amber);font-size:14px;font-weight:700">DISCLAIMER & TERMS</div>
+      <button onclick="closeLegal()" style="background:none;border:none;color:var(--text3);font-size:20px;cursor:pointer;font-family:var(--mono)">&times;</button>
+    </div>
+
+    <div style="font-size:11px;color:var(--text2);line-height:1.7">
+      <div style="color:var(--red);font-size:10px;letter-spacing:1px;font-weight:700;margin-bottom:6px;padding-bottom:4px;border-bottom:1px solid var(--border2)">DISCLAIMER</div>
+      <p>This software is an independent, community-developed, open-source project. It is <strong style="color:var(--text)">NOT</strong> affiliated with, endorsed by, or supported by Bloomberg L.P.</p>
+      <p>"Bloomberg", "Bloomberg Terminal", "BLPAPI", and "BQL" are trademarks of Bloomberg L.P. Used for descriptive purposes only.</p>
+      <p>This software is provided "AS IS", without warranty of any kind. The authors are not liable for any damages arising from its use.</p>
+
+      <div style="color:var(--amber);font-size:10px;letter-spacing:1px;font-weight:700;margin:16px 0 6px;padding-bottom:4px;border-bottom:1px solid var(--border2)">BLOOMBERG COMPLIANCE</div>
+      <p><strong style="color:var(--text)">Your responsibilities:</strong></p>
+      <ul style="margin:4px 0 8px 16px;padding:0">
+        <li>You must have an active Bloomberg Terminal subscription with API access</li>
+        <li>You must comply with Bloomberg data policies on storage, display, and redistribution</li>
+        <li>Exposing this server beyond localhost may constitute data redistribution</li>
+        <li>Bloomberg Terminals have connection limits; excessive API calls may disrupt your session</li>
+        <li>Do not use this tool to circumvent Bloomberg licensing restrictions</li>
+      </ul>
+
+      <div style="color:var(--amber);font-size:10px;letter-spacing:1px;font-weight:700;margin:16px 0 6px;padding-bottom:4px;border-bottom:1px solid var(--border2)">PRIVACY</div>
+      <p>This software does <strong style="color:var(--text)">NOT</strong> collect, transmit, or store any data externally. No analytics, no tracking, no telemetry.</p>
+      <ul style="margin:4px 0 8px 16px;padding:0">
+        <li>API keys are stored locally in config.json on your server</li>
+        <li>UI settings are in your browser's localStorage</li>
+        <li>Chat history exists only in browser memory (not persisted)</li>
+        <li>Bloomberg data is not cached, stored, or logged</li>
+      </ul>
+      <p>AI chat messages are sent to your selected provider (Anthropic, OpenAI, or Google) subject to their privacy policies.</p>
+
+      <div style="color:var(--amber);font-size:10px;letter-spacing:1px;font-weight:700;margin:16px 0 6px;padding-bottom:4px;border-bottom:1px solid var(--border2)">TERMS OF USE</div>
+      <p>By using this software, you accept full responsibility for compliance with your Bloomberg Terminal agreement and all applicable data redistribution policies. You are responsible for securing access and for any AI provider API costs incurred.</p>
+
+      <p style="margin-top:12px"><a href="https://github.com/heathermhuang/bbg-api-playground/blob/master/DISCLAIMER.md" target="_blank" rel="noopener" style="color:var(--amber)">Full terms on GitHub</a> · Licensed under MIT</p>
     </div>
   </div>
 </div>
@@ -394,6 +469,13 @@
     </div>
     <div id="sidebar-tags"></div>
     <div id="sidebar-list"></div>
+    <div id="sidebar-footer" style="padding:8px 10px;border-top:1px solid var(--border);font-size:9px;color:var(--text3);font-family:var(--mono);line-height:1.6">
+      <a href="https://github.com/heathermhuang/bbg-api-playground" target="_blank" rel="noopener" style="color:var(--text3);text-decoration:none;">GitHub</a> ·
+      <a href="#" onclick="openLegal();return false" style="color:var(--text3);text-decoration:none;">Disclaimer</a> ·
+      <a href="#" onclick="openLegal();return false" style="color:var(--text3);text-decoration:none;">Terms</a> ·
+      <a href="#" onclick="openLegal();return false" style="color:var(--text3);text-decoration:none;">Privacy</a>
+      <div style="margin-top:4px;opacity:.6">Not affiliated with Bloomberg L.P.</div>
+    </div>
   </div>
   <div class="sidebar-backdrop" onclick="document.body.classList.remove('sidebar-open')"></div>
 
@@ -617,6 +699,11 @@ const _DEFAULTS = {
   display_name: '',
   ai_provider:  'anthropic',
   ai_model:     '',
+  fmp_key:      '',
+  fred_key:     '',
+  polygon_key:  '',
+  intrinio_key: '',
+  alphavantage_key: '',
 };
 function _loadConfig() {
   try { return { ..._DEFAULTS, ...JSON.parse(localStorage.getItem('bbg-playground-config') || '{}') }; }
@@ -2672,6 +2759,12 @@ async function openSettings() {
   document.getElementById('settings-model').placeholder = defaults.model;
   document.getElementById('settings-apikey').placeholder = defaults.placeholder;
   document.getElementById('settings-apikey').value = '';
+  // Populate data provider keys
+  document.getElementById('settings-fmp-key').value = _config.fmp_key || '';
+  document.getElementById('settings-fred-key').value = _config.fred_key || '';
+  document.getElementById('settings-polygon-key').value = _config.polygon_key || '';
+  document.getElementById('settings-intrinio-key').value = _config.intrinio_key || '';
+  document.getElementById('settings-alphavantage-key').value = _config.alphavantage_key || '';
   // Check key status for selected provider
   _updateProviderStatus(p);
 }
@@ -2683,6 +2776,11 @@ async function saveSettings() {
   _config.display_name = document.getElementById('settings-display-name').value.trim();
   _config.ai_provider  = document.getElementById('settings-provider').value;
   _config.ai_model     = document.getElementById('settings-model').value.trim();
+  _config.fmp_key          = document.getElementById('settings-fmp-key').value.trim();
+  _config.fred_key         = document.getElementById('settings-fred-key').value.trim();
+  _config.polygon_key      = document.getElementById('settings-polygon-key').value.trim();
+  _config.intrinio_key     = document.getElementById('settings-intrinio-key').value.trim();
+  _config.alphavantage_key = document.getElementById('settings-alphavantage-key').value.trim();
   _saveConfig(_config);
   BASES.bbg    = _config.bbg_url;
   BASES.openbb = _config.openbb_url;
@@ -2724,10 +2822,17 @@ function resetSettings() {
   document.getElementById('settings-bbg-url').value = '';
   document.getElementById('settings-openbb-url').value = '';
   document.getElementById('settings-display-name').value = '';
+  document.getElementById('settings-fmp-key').value = '';
+  document.getElementById('settings-fred-key').value = '';
+  document.getElementById('settings-polygon-key').value = '';
+  document.getElementById('settings-intrinio-key').value = '';
+  document.getElementById('settings-alphavantage-key').value = '';
   document.getElementById('settings-status').textContent = 'Reset to defaults';
   document.getElementById('settings-status').style.color = 'var(--text3)';
 }
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSettings(); });
+function openLegal() { document.getElementById('legal-modal').style.display = 'block'; }
+function closeLegal() { document.getElementById('legal-modal').style.display = 'none'; }
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeSettings(); closeLegal(); } });
 
 // ─── Init ─────────────────────────────────────────────────────────────────────
 buildFilterTags();
