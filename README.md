@@ -1,214 +1,142 @@
-# Bloomberg Terminal API Playground
+# BBG API Playground
 
-Your Bloomberg Terminal as a REST API. Query BDP, BDH, BDS, BQL, intraday data, and more from any browser -- with an AI assistant that writes the queries for you.
+A browser-based interface for querying financial data through [blpapi](https://www.bloomberg.com/professional/support/api-library/) and [OpenBB](https://openbb.co). Execute BDP, BDH, BDS, BQL, and intraday requests, visualize results as tables and charts, and let an AI assistant write the queries for you.
 
-Built on [blpapi](https://www.bloomberg.com/professional/support/api-library/) + [OpenBB](https://openbb.co). AI assistant supports [Claude](https://anthropic.com), [OpenAI](https://openai.com), and [Gemini](https://ai.google.dev) -- bring your own key.
+Supports [Claude](https://anthropic.com), [OpenAI](https://openai.com), and [Gemini](https://ai.google.dev) as AI providers. Bring your own key.
 
----
-
-### The Playground
-
-Point, click, query. Every Bloomberg and OpenBB endpoint in one interface with categorized sidebar, parameter editor, and one-click execution. Filter by category, search by name, or browse the full catalog.
-
-![Bloomberg API Playground](docs/images/hero-playground.png)
+![BBG API Playground](docs/images/hero-playground.png)
 
 ---
 
-### Instant Data Tables
+## Highlights
 
-Responses render as sortable, formatted tables with color-coded values. Click any column header to sort. Copy as TSV or download as CSV. Works with multi-security, multi-field queries out of the box.
+### Data Tables & Charts
 
-![Sortable Table View](docs/images/table-view.png)
+Query results render as sortable tables with color-coded values, or as auto-detected charts (line, bar, pie). Copy as TSV, download as CSV, or visualize in one click.
 
----
+<p>
+  <img src="docs/images/table-view.png" alt="Table View" width="49%">
+  <img src="docs/images/chart-view.png" alt="Chart View" width="49%">
+</p>
 
-### Auto-Detected Charts
+### AI Assistant
 
-Time series data gets line charts. Categorical data gets bar charts. The chart tab auto-detects the right visualization from your response data -- no configuration needed.
+Describe what you need in plain English. The assistant knows blpapi fields, BQL syntax, OpenBB endpoints, and generates runnable API calls you can execute directly.
 
-![Chart View](docs/images/chart-view.png)
+![AI Assistant](docs/images/ai-chat.png)
 
----
+### Python SDK & Excel Integration
 
-### AI That Speaks Bloomberg
+OpenBB examples include ready-to-run Python snippets. The Formula Builder generates =BDP(), =BDH(), =BDS(), =BQL() formulas across 108 fields, and the Excel Bridge produces Power Query M code and VBA macros.
 
-Ask in plain English, get the exact API call. The AI assistant knows Bloomberg fields, BQL syntax, OpenBB endpoints, and the difference between what works via API vs. what needs the Excel Add-in. Supports Claude, GPT, and Gemini -- bring your own key.
+<p>
+  <img src="docs/images/python-sdk.png" alt="Python SDK" width="49%">
+  <img src="docs/images/formula-builder.png" alt="Formula Builder" width="49%">
+</p>
 
-![AI Chat Assistant](docs/images/ai-chat.png)
+### Settings & Mobile
 
----
+Configure AI providers, API endpoints, and data provider keys (FMP, FRED, Polygon, Intrinio, Alpha Vantage). Fully responsive on mobile with slide-out sidebar and full-screen chat.
 
-### Python SDK Snippets
-
-Every OpenBB example includes a ready-to-run Python SDK snippet. Copy it straight into a notebook or script. Bloomberg examples show the equivalent blpapi code.
-
-![Python SDK](docs/images/python-sdk.png)
-
----
-
-### Excel Formula Builder
-
-108 Bloomberg fields across 9 categories. Pick a security, pick a field, get the exact =BDP(), =BDH(), =BDS(), or =BQL() formula ready to paste into Excel.
-
-![Formula Builder](docs/images/formula-builder.png)
-
----
-
-### Excel Bridge
-
-Get data from the API straight into Excel. Auto-generated Power Query M code, VBA macros, tab-separated copy for quick paste, and CSV download.
-
-![Excel Bridge](docs/images/excel-bridge.png)
-
----
-
-### Settings & Data Providers
-
-Configure AI provider and model, set Bloomberg and OpenBB API URLs, add API keys for data providers (FMP, FRED, Polygon, Intrinio, Alpha Vantage). Data provider keys stay in your browser -- never sent to the server.
-
-![Settings](docs/images/settings.png)
-
----
-
-### Mobile Ready
-
-Full playground on your phone. Sidebar becomes a slide-out drawer, tabs scroll horizontally, chat goes full-screen.
-
-<p align="center">
-  <img src="docs/images/mobile-responsive.png" alt="Mobile Responsive" width="280">
+<p>
+  <img src="docs/images/settings.png" alt="Settings" width="64%">
+  <img src="docs/images/mobile-responsive.png" alt="Mobile" width="18%">
 </p>
 
 ---
 
 ## Features
 
-- **REST API wrapper** -- BDP, BDH, BDS, BQL, intraday bars/ticks, field search, security lookup, yield curves
-- **Interactive playground** -- categorized examples, parameter editor, one-click execution
-- **AI assistant** -- chatbot that builds Bloomberg API calls and Excel formulas from natural language (Claude, GPT, Gemini -- bring your own key)
-- **Multiple views** -- JSON, sortable table, auto-detected charts (time series, bar, pie)
-- **Formula Builder** -- generates =BDP(), =BDH(), =BDS(), =BQL() with 108-field quick reference
-- **Excel Bridge** -- Power Query, VBA macro, TSV copy, CSV download
-- **OpenBB integration** -- equities, fixed income, FX, economy, derivatives via OpenBB Platform
-- **Python SDK** -- every OpenBB example includes a copy-paste Python snippet
-- **Mobile responsive** -- sidebar drawer, scrollable tabs, full-screen chat
-- **Configurable endpoints** -- set API URLs per-browser via settings modal
-- **Data provider keys** -- FMP, FRED, Polygon, Intrinio, Alpha Vantage (browser-only, never sent to server)
-- **CSV export** -- append `?format=csv` to any BDP/BDH/BDS endpoint
+- **REST API wrapper** for BDP, BDH, BDS, BQL, intraday bars/ticks, field search, security lookup, yield curves
+- **Interactive playground** with categorized examples, parameter editor, and one-click execution
+- **AI assistant** that generates API calls and Excel formulas from natural language (Claude, GPT, Gemini)
+- **Multiple views**: JSON, sortable table, auto-detected charts
+- **Formula Builder** with 108-field quick reference across 9 categories
+- **Excel Bridge**: Power Query, VBA macro, TSV copy, CSV download
+- **OpenBB integration** with 69 pre-built examples covering equities, fixed income, FX, macro, options, indices, commodities, ETFs, and news
+- **Python SDK snippets** for every OpenBB example
+- **Mobile responsive** with sidebar drawer, scrollable tabs, full-screen chat
+- **Per-browser settings** for API URLs, AI provider, model selection, and data provider keys
+- **CSV export** via `?format=csv` on any BDP/BDH/BDS endpoint
 
 ## Prerequisites
 
-- **Bloomberg Terminal** running on the same machine (or network-accessible via `BBG_HOST`)
+- **Terminal** running with blpapi access (local or network-accessible via `BBG_HOST`)
 - **Python 3.9+**
-- **blpapi** Python package (requires the Bloomberg C++ SDK)
+- **blpapi** Python package (requires the C++ SDK)
 
 ## Quick Start
 
 ```bash
-# Clone the repo
 git clone https://github.com/heathermhuang/bbg-api-playground.git
 cd bbg-api-playground
 
-# Copy and edit environment config
-cp .env.example .env
-# Edit .env with your Bloomberg host/port, optional Anthropic key, etc.
+cp .env.example .env    # edit with your host/port and optional API keys
 
-# Install dependencies
 pip install -r requirements.txt
-
-# Start the all-in-one playground (API + static files + proxy)
 python proxy-playground.py
 ```
 
-Open **http://127.0.0.1:8081** in your browser.
+Open **http://127.0.0.1:8081**.
 
 ## Architecture
 
 ```
 Browser ──> proxy-playground.py (:8081)
-               ├─ /bdp, /bdh, /bds, /bql, ...  ──> bbg_api.py (:8195) ──> Bloomberg Terminal
+               ├─ /bdp, /bdh, /bds, /bql, ...  ──> bbg_api.py (:8195) ──> Terminal
                ├─ /api/...                      ──> OpenBB API (:6900)
-               └─ /*.html, /*.js, /*.css        ──> static files
+               └─ static files
 ```
 
-### Running Components Separately
+Components can also run independently:
 
 ```bash
-# Bloomberg API server only
-uvicorn bbg_api:app --host 127.0.0.1 --port 8195
-
-# OpenBB API (if installed)
-openbb-api --host 127.0.0.1 --port 6900
-
-# Proxy + static server
-python proxy-playground.py
+uvicorn bbg_api:app --host 127.0.0.1 --port 8195   # API server only
+openbb-api --host 127.0.0.1 --port 6900             # OpenBB (if installed)
+python proxy-playground.py                           # proxy + static files
 ```
 
 ## Configuration
 
-All configuration is via environment variables (or a `.env` file):
+All settings are via environment variables or a `.env` file.
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `BBG_HOST` | `127.0.0.1` | Bloomberg Terminal host |
-| `BBG_PORT` | `8194` | Bloomberg Terminal port |
-| `API_HOST` | `127.0.0.1` | API server listen address |
-| `API_PORT` | `8195` | API server listen port |
-| `PROXY_HOST` | `127.0.0.1` | Proxy server listen address |
-| `PROXY_PORT` | `8081` | Proxy server listen port |
+| `BBG_HOST` | `127.0.0.1` | Terminal host |
+| `BBG_PORT` | `8194` | Terminal port |
+| `API_HOST` | `127.0.0.1` | API server bind address |
+| `API_PORT` | `8195` | API server port |
+| `PROXY_HOST` | `127.0.0.1` | Proxy bind address |
+| `PROXY_PORT` | `8081` | Proxy port |
 | `OPENBB_HOST` | `127.0.0.1` | OpenBB API host |
 | `OPENBB_PORT` | `6900` | OpenBB API port |
-| `SERVE_DIR` | `./` | Static file directory |
-| `ALLOWED_IPS` | `*` | Comma-separated IP whitelist, or `*` for all |
-| `TRUST_CF_IP` | | Set to `true` to trust CF-Connecting-IP header (Cloudflare only) |
-| `BBG_RATE_LIMIT` | `30` | Bloomberg endpoint rate limit (requests/minute per IP) |
-| `CHAT_RATE_LIMIT` | `20` | AI chat rate limit (requests/minute per IP) |
-| `ENABLE_DOCS` | | Set to `true` to enable /docs and /openapi.json |
-| `AI_PROVIDER` | `anthropic` | Default AI provider (`anthropic`, `openai`, `google`) |
-| `AI_MODEL` | | Override default model for the provider |
-| `ANTHROPIC_API_KEY` | | API key for Claude |
-| `OPENAI_API_KEY` | | API key for OpenAI / compatible APIs |
-| `GOOGLE_API_KEY` | | API key for Google Gemini |
+| `ALLOWED_IPS` | `*` | Comma-separated IP whitelist (`*` = all) |
+| `TRUST_CF_IP` | | Trust `CF-Connecting-IP` header (Cloudflare only) |
+| `BBG_RATE_LIMIT` | `30` | Requests/min per IP (terminal endpoints) |
+| `CHAT_RATE_LIMIT` | `20` | Requests/min per IP (AI chat) |
+| `ENABLE_DOCS` | | Expose `/docs` and `/openapi.json` |
+| `AI_PROVIDER` | `anthropic` | Default provider: `anthropic`, `openai`, `google` |
+| `AI_MODEL` | | Override default model |
+| `ANTHROPIC_API_KEY` | | Claude API key |
+| `OPENAI_API_KEY` | | OpenAI API key (or any compatible provider) |
+| `GOOGLE_API_KEY` | | Gemini API key |
 
-The OpenAI provider works with any OpenAI-compatible API (Groq, Together, Mistral, etc.) -- set `OPENAI_BASE_URL` to point to your provider.
+Set `OPENAI_BASE_URL` to use any OpenAI-compatible API (Groq, Together, Mistral, etc.).
 
 ### Browser-Side Settings
 
-Click **Settings** in the playground header to configure:
-- **Bloomberg API URL** -- where BDP/BDH/BDS/BQL requests go
-- **OpenBB API URL** -- where OpenBB requests go
-- **Display name** -- shown in the status bar
-- **AI Provider** -- choose Anthropic (Claude), OpenAI (GPT), or Google (Gemini)
-- **Model** -- override the default model for your provider
-- **API Key** -- saved to the server per-provider for chatbot use
-- **Data provider keys** -- FMP, FRED, Polygon, Intrinio, Alpha Vantage (saved in browser only)
+Click **Settings** in the header to configure API URLs, AI provider and model, display name, and data provider keys (FMP, FRED, Polygon, Intrinio, Alpha Vantage). Provider keys are stored in `localStorage` and never sent to the server.
 
-Settings persist in `localStorage` per browser.
+## API Reference
 
-## File Structure
-
-```
-playground.html          Main playground UI (all-in-one SPA)
-formula-builder.html     Standalone Excel formula builder
-fields.js                Shared Bloomberg field definitions (108 fields, 9 categories)
-bbg_api.py               FastAPI server wrapping blpapi
-proxy-playground.py      Reverse proxy + static file server
-proxy.py                 Minimal Bloomberg-only proxy
-proxy-bbg.py             Bloomberg-only proxy variant
-requirements.txt         Python dependencies
-.env.example             Environment variable template
-.gitignore               Git ignore rules
-```
-
-## API Endpoints
-
-### Bloomberg Terminal
+### Terminal Endpoints
 
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/bdp?securities=...&fields=...` | Reference data (current values) |
 | GET | `/bdh?securities=...&fields=...&start_date=...` | Historical time series |
 | GET | `/bds?security=...&field=...` | Bulk/array data |
-| GET | `/bql?query=...` | Bloomberg Query Language |
+| GET | `/bql?query=...` | BQL queries |
 | GET | `/intraday/bars?security=...&interval=...&start_datetime=...` | Intraday bars |
 | GET | `/intraday/ticks?security=...&start_datetime=...` | Intraday ticks |
 | GET | `/fields/search?query=...` | Field name search |
@@ -217,26 +145,40 @@ requirements.txt         Python dependencies
 | GET | `/curve?curve_id=USD` | Yield curve |
 | GET | `/health` | Health check |
 
-Append `?format=csv` to `/bdp`, `/bdh`, or `/bds` for CSV download.
+Append `?format=csv` to `/bdp`, `/bdh`, or `/bds` for CSV output.
 
-### OpenBB (proxied via `/api/`)
+### OpenBB Endpoints
 
-All OpenBB Platform API v1 endpoints are available under `/api/v1/...`. The playground includes 69 pre-built examples covering equities, fundamentals, fixed income, FX, crypto, macro, options, indices, commodities, ETFs, and news.
+All OpenBB Platform API v1 routes are proxied under `/api/v1/...`.
 
-## Security Notes
+## File Structure
 
-- **Never expose this directly to the internet** without IP whitelisting (`ALLOWED_IPS`) or a reverse proxy with authentication
-- Per-IP rate limiting on all Bloomberg and AI chat endpoints
-- The API key is stored server-side in `config.json` with restricted permissions (git-ignored)
-- CF-Connecting-IP trust is off by default; enable only behind Cloudflare (`TRUST_CF_IP=true`)
-- /docs and /openapi.json are disabled by default; enable with `ENABLE_DOCS=true`
-- Error responses are sanitized -- no stack traces or internal paths leak to clients
-- CORS is set to `*` for local development; restrict in production
+```
+playground.html        Single-page application (all UI)
+formula-builder.html   Standalone Excel formula builder
+fields.js              Shared field definitions (108 fields, 9 categories)
+bbg_api.py             FastAPI server wrapping blpapi
+proxy-playground.py    Reverse proxy + static file server
+proxy.py               Minimal proxy variant
+proxy-bbg.py           Terminal-only proxy variant
+requirements.txt       Python dependencies
+.env.example           Environment variable template
+```
+
+## Security
+
+- **Do not expose directly to the internet** without IP whitelisting or a reverse proxy with authentication
+- Per-IP rate limiting on all terminal and AI chat endpoints
+- API keys stored server-side in `config.json` (0600 permissions, git-ignored)
+- `CF-Connecting-IP` trust disabled by default
+- `/docs` and `/openapi.json` disabled by default
+- Error responses are sanitized (no stack traces or internal paths)
+- CORS set to `*` for local development; restrict in production
 
 ## Disclaimer
 
-This project is not affiliated with, endorsed by, or connected to Bloomberg L.P. See [DISCLAIMER.md](DISCLAIMER.md) for full terms, Bloomberg compliance notes, and privacy policy.
+This project is not affiliated with, endorsed by, or connected to Bloomberg L.P. Use of terminal data is subject to your existing license agreement. See [DISCLAIMER.md](DISCLAIMER.md) for full terms and privacy policy.
 
 ## License
 
-MIT License. See [LICENSE](LICENSE).
+MIT. See [LICENSE](LICENSE).
