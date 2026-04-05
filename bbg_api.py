@@ -809,7 +809,7 @@ AI_PROVIDERS = {
     },
     "openai": {
         "env_key": "OPENAI_API_KEY",
-        "default_model": "o3-mini",
+        "default_model": "gpt-5.4",
         "base_url": "https://api.openai.com",
     },
     "google": {
