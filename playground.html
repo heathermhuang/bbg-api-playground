@@ -1306,11 +1306,11 @@ const EXAMPLES = [
 
   // ── EQUITY EXTENDED ──
   { cat: 'Equities', name: 'Short Interest', desc: 'Short float & days to cover',
-    endpoint: '/api/v1/equity/short_interest', params: { symbol: 'GME', provider: 'finra' },
-    sdk: `from openbb import obb\n\n# Get short interest data for GME\nresult = obb.equity.short_interest(\n    symbol="GME",\n    provider="finra",\n)\ndf = result.to_df()` },
+    endpoint: '/api/v1/equity/shorts/short_interest', params: { symbol: 'GME', provider: 'finra' },
+    sdk: `from openbb import obb\n\n# Get short interest data for GME\nresult = obb.equity.shorts.short_interest(\n    symbol="GME",\n    provider="finra",\n)\ndf = result.to_df()` },
   { cat: 'Equities', name: 'ESG Scores', desc: 'Environmental, Social, Governance',
-    endpoint: '/api/v1/equity/fundamental/esg', params: { symbol: 'MSFT', provider: 'fmp' },
-    sdk: `from openbb import obb\n\n# Get ESG scores for MSFT\nresult = obb.equity.fundamental.esg(\n    symbol="MSFT",\n    provider="fmp",\n)\ndf = result.to_df()` },
+    endpoint: '/api/v1/equity/fundamental/esg_score', params: { symbol: 'MSFT', provider: 'fmp' },
+    sdk: `from openbb import obb\n\n# Get ESG scores for MSFT\nresult = obb.equity.fundamental.esg_score(\n    symbol="MSFT",\n    provider="fmp",\n)\ndf = result.to_df()` },
   { cat: 'Equities', name: 'Revenue Segments', desc: 'Revenue by geography/product',
     endpoint: '/api/v1/equity/fundamental/revenue_per_segment', params: { symbol: 'AAPL', provider: 'fmp' },
     sdk: `from openbb import obb\n\n# Get revenue by segment for AAPL\nresult = obb.equity.fundamental.revenue_per_segment(\n    symbol="AAPL",\n    provider="fmp",\n)\ndf = result.to_df()` },
@@ -1320,15 +1320,15 @@ const EXAMPLES = [
 
   // ── MACRO EXTENDED ──
   { cat: 'Macro', name: 'Unemployment Rate', desc: 'US unemployment series',
-    endpoint: '/api/v1/economy/survey/unemployment', params: { start_date: '2015-01-01', provider: 'fred' },
-    sdk: `from openbb import obb\n\n# Get US unemployment rate\nresult = obb.economy.survey.unemployment(\n    start_date="2015-01-01",\n    provider="fred",\n)\ndf = result.to_df()`,
+    endpoint: '/api/v1/economy/unemployment', params: { start_date: '2015-01-01', provider: 'fred' },
+    sdk: `from openbb import obb\n\n# Get US unemployment rate\nresult = obb.economy.unemployment(\n    start_date="2015-01-01",\n    provider="fred",\n)\ndf = result.to_df()`,
     chart: { xKey: 'date', yKey: 'value', label: 'Unemployment %' } },
-  { cat: 'Macro', name: 'Retail Sales', desc: 'Monthly retail trade data',
-    endpoint: '/api/v1/economy/survey/retail_sales', params: { start_date: '2020-01-01', provider: 'fred' },
-    sdk: `from openbb import obb\n\n# Get monthly retail sales data\nresult = obb.economy.survey.retail_sales(\n    start_date="2020-01-01",\n    provider="fred",\n)\ndf = result.to_df()` },
-  { cat: 'Macro', name: 'Housing Starts', desc: 'New residential construction',
-    endpoint: '/api/v1/economy/survey/university_of_michigan', params: { start_date: '2015-01-01', provider: 'fred' },
-    sdk: `from openbb import obb\n\n# Get University of Michigan survey data\nresult = obb.economy.survey.university_of_michigan(\n    start_date="2015-01-01",\n    provider="fred",\n)\ndf = result.to_df()` },
+  { cat: 'Macro', name: 'Retail Prices', desc: 'Monthly retail price index data',
+    endpoint: '/api/v1/economy/retail_prices', params: { start_date: '2020-01-01', provider: 'fred' },
+    sdk: `from openbb import obb\n\n# Get monthly retail price data\nresult = obb.economy.retail_prices(\n    start_date="2020-01-01",\n    provider="fred",\n)\ndf = result.to_df()` },
+  { cat: 'Macro', name: 'House Price Index', desc: 'US house price index data',
+    endpoint: '/api/v1/economy/house_price_index', params: { provider: 'fred' },
+    sdk: `from openbb import obb\n\n# Get house price index data\nresult = obb.economy.house_price_index(\n    provider="fred",\n)\ndf = result.to_df()` },
   { cat: 'Macro', name: 'Balance of Payments', desc: 'Trade balance & current account',
     endpoint: '/api/v1/economy/balance_of_payments', params: { provider: 'ecb' },
     sdk: `from openbb import obb\n\n# Get balance of payments data\nresult = obb.economy.balance_of_payments(\n    provider="ecb",\n)\ndf = result.to_df()` },
@@ -1355,7 +1355,7 @@ function buildFilterTags() {
   const all = [...new Set(getExamples().map(e => e.cat))];
   document.getElementById('sidebar-tags').innerHTML =
     `<span class="filter-tag${!_sidebarTag ? ' active' : ''}" onclick="setSidebarTag('')">All</span>` +
-    all.map(c => `<span class="filter-tag${_sidebarTag === c ? ' active' : ''}" onclick="setSidebarTag(${JSON.stringify(c)})">${shortCat(c)}</span>`).join('');
+    all.map(c => `<span class="filter-tag${_sidebarTag === c ? ' active' : ''}" onclick="setSidebarTag('${c.replace(/'/g, "\\'")}')">${shortCat(c)}</span>`).join('');
 }
 
 function setSidebarTag(tag) {
@@ -1379,7 +1379,7 @@ function buildSidebar(filter = '') {
   list.innerHTML = Object.entries(cats).map(([cat, items]) => {
     const collapsed = _collapsed[cat];
     return `
-      <div class="cat-header" onclick="toggleCat(${JSON.stringify(cat)})">
+      <div class="cat-header" onclick="toggleCat('${cat.replace(/'/g, "\\'")}')">
         <span>${shortCat(cat)}</span>
         <span class="cat-toggle">${collapsed ? '▶' : '▼'} ${items.length}</span>
       </div>
