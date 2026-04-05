@@ -658,6 +658,25 @@ function switchApi(api) {
   buildFilterTags();
   buildSidebar();
   checkStatus();
+
+  // Update tab labels and visibility based on active API
+  const tabs = document.querySelectorAll('#tabs > .tab');
+  if (api === 'openbb') {
+    tabs[3].textContent = 'Python SDK';      // was "Bloomberg Code"
+    tabs[4].textContent = 'Python';           // was "Excel"
+    tabs[5].style.display = 'none';           // hide Formula Builder
+    tabs[6].style.display = 'none';           // hide Excel Bridge
+    // If currently on a hidden tab, switch to Response
+    if (document.getElementById('tab-formula').classList.contains('active') ||
+        document.getElementById('tab-bridge').classList.contains('active')) {
+      switchTab('response');
+    }
+  } else {
+    tabs[3].textContent = 'Bloomberg Code';
+    tabs[4].textContent = 'Excel';
+    tabs[5].style.display = '';
+    tabs[6].style.display = '';
+  }
 }
 
 // ─── Examples ─────────────────────────────────────────────────────────────────
@@ -860,131 +879,158 @@ const EXAMPLES = [
     endpoint: '/api/v1/equity/price/historical',
     params: { symbol: 'AAPL', start_date: '2024-01-01', end_date: '2024-12-31', provider: 'yfinance' },
     blp: `import blpapi\n\n# Bloomberg Terminal: Historical Data\n# BDP / BDH / BDS functions\n\nservice = "//blp/refdata"\nsecurity = "AAPL US Equity"\nfields = ["PX_LAST", "PX_OPEN", "PX_HIGH", "PX_LOW", "PX_VOLUME"]\n\n# Using BLPAPI directly\nrequest = service.createRequest("HistoricalDataRequest")\nrequest.append("securities", security)\nfor f in fields:\n    request.append("fields", f)\nrequest.set("startDate", "20240101")\nrequest.set("endDate", "20241231")\nrequest.set("periodicitySelection", "DAILY")\n\n# Bloomberg Terminal formula (Excel)\n# =BDH("AAPL US Equity","PX_LAST","1/1/2024","12/31/2024")`,
+    sdk: `from openbb import obb\n\n# Get historical price data for AAPL\nresult = obb.equity.price.historical(\n    symbol="AAPL",\n    start_date="2024-01-01",\n    end_date="2024-12-31",\n    provider="yfinance",\n)\ndf = result.to_df()`,
     chart: { xKey: 'date', yKey: 'close', label: 'AAPL Close Price' }
   },
   { cat: 'Equities', name: 'Real-time Quote (MSFT)', desc: 'Latest bid/ask/last',
     endpoint: '/api/v1/equity/price/quote',
     params: { symbol: 'MSFT', provider: 'yfinance' },
-    blp: `import blpapi\n\n# Bloomberg: Real-time quote\n# Field mnemonics: PX_LAST, BID, ASK, VOLUME\n\nservice = "//blp/refdata"\nrequest = service.createRequest("ReferenceDataRequest")\nrequest.append("securities", "MSFT US Equity")\nfor f in ["PX_LAST", "BID", "ASK", "PX_VOLUME", "CHG_PCT_1D"]:\n    request.append("fields", f)\n\n# Terminal shortcut: MSFT US Equity <EQUITY> DES`
+    blp: `import blpapi\n\n# Bloomberg: Real-time quote\n# Field mnemonics: PX_LAST, BID, ASK, VOLUME\n\nservice = "//blp/refdata"\nrequest = service.createRequest("ReferenceDataRequest")\nrequest.append("securities", "MSFT US Equity")\nfor f in ["PX_LAST", "BID", "ASK", "PX_VOLUME", "CHG_PCT_1D"]:\n    request.append("fields", f)\n\n# Terminal shortcut: MSFT US Equity <EQUITY> DES`,
+    sdk: `from openbb import obb\n\n# Get real-time quote for MSFT\nresult = obb.equity.price.quote(\n    symbol="MSFT",\n    provider="yfinance",\n)\ndf = result.to_df()`
   },
   { cat: 'Equities', name: 'Company Profile (TSLA)', desc: 'Business description & metadata',
     endpoint: '/api/v1/equity/profile',
     params: { symbol: 'TSLA', provider: 'yfinance' },
-    blp: `# Bloomberg: Company profile fields\nsecurity = "TSLA US Equity"\nfields = [\n    "COMPANY_NAME",\n    "GICS_SECTOR_NAME",\n    "GICS_INDUSTRY_NAME",\n    "CIE_DES",          # Company description\n    "CEO_NAME",\n    "EMPLOYEE_CNT",\n    "MARKET_CAP",\n    "COUNTRY_ISO",\n]\n# Terminal: TSLA US <EQUITY> DES <GO>`
+    blp: `# Bloomberg: Company profile fields\nsecurity = "TSLA US Equity"\nfields = [\n    "COMPANY_NAME",\n    "GICS_SECTOR_NAME",\n    "GICS_INDUSTRY_NAME",\n    "CIE_DES",          # Company description\n    "CEO_NAME",\n    "EMPLOYEE_CNT",\n    "MARKET_CAP",\n    "COUNTRY_ISO",\n]\n# Terminal: TSLA US <EQUITY> DES <GO>`,
+    sdk: `from openbb import obb\n\n# Get company profile for TSLA\nresult = obb.equity.profile(\n    symbol="TSLA",\n    provider="yfinance",\n)\ndf = result.to_df()`
   },
   { cat: 'Equities', name: 'Earnings Calendar', desc: 'Upcoming earnings dates',
     endpoint: '/api/v1/equity/calendar/earnings',
     params: { start_date: '2025-01-01', end_date: '2025-03-31', provider: 'fmp' },
-    blp: `# Bloomberg: Earnings calendar\n# Terminal: EVTS <GO> — Event calendar\n# or: ERN <GO> — Earnings calendar\n\nfields = [\n    "ANNOUNCEMENT_DT",\n    "IS_EPS",           # Reported EPS\n    "IS_EPS_EST_DES",   # EPS estimate description\n    "BEST_EPS",         # Consensus EPS estimate\n]`
+    blp: `# Bloomberg: Earnings calendar\n# Terminal: EVTS <GO> — Event calendar\n# or: ERN <GO> — Earnings calendar\n\nfields = [\n    "ANNOUNCEMENT_DT",\n    "IS_EPS",           # Reported EPS\n    "IS_EPS_EST_DES",   # EPS estimate description\n    "BEST_EPS",         # Consensus EPS estimate\n]`,
+    sdk: `from openbb import obb\n\n# Get upcoming earnings calendar\nresult = obb.equity.calendar.earnings(\n    start_date="2025-01-01",\n    end_date="2025-03-31",\n    provider="fmp",\n)\ndf = result.to_df()`
   },
   { cat: 'Equities', name: 'Price Performance', desc: 'Relative performance periods',
     endpoint: '/api/v1/equity/price/performance',
     params: { symbol: 'NVDA', provider: 'fmp' },
-    blp: `# Bloomberg: Return attribution\n# Terminal: NVDA US <EQUITY> GP <GO>\nfields = [\n    "DAY_TO_DAY_TOT_RETURN_GROSS_DVDS",\n    "TOT_RETURN_INDEX_GROSS_DVDS",\n    "RETURN_1D", "RETURN_1W",\n    "RETURN_1M", "RETURN_3M",\n    "RETURN_6M", "RETURN_1YR",\n    "RETURN_YTD",\n]`
+    blp: `# Bloomberg: Return attribution\n# Terminal: NVDA US <EQUITY> GP <GO>\nfields = [\n    "DAY_TO_DAY_TOT_RETURN_GROSS_DVDS",\n    "TOT_RETURN_INDEX_GROSS_DVDS",\n    "RETURN_1D", "RETURN_1W",\n    "RETURN_1M", "RETURN_3M",\n    "RETURN_6M", "RETURN_1YR",\n    "RETURN_YTD",\n]`,
+    sdk: `from openbb import obb\n\n# Get price performance for NVDA\nresult = obb.equity.price.performance(\n    symbol="NVDA",\n    provider="fmp",\n)\ndf = result.to_df()`
   },
   { cat: 'Equities', name: 'Historical Mkt Cap', desc: 'Market cap over time',
     endpoint: '/api/v1/equity/historical_market_cap',
     params: { symbol: 'AMZN', start_date: '2020-01-01', provider: 'fmp' },
+    sdk: `from openbb import obb\n\n# Get historical market cap for AMZN\nresult = obb.equity.historical_market_cap(\n    symbol="AMZN",\n    start_date="2020-01-01",\n    provider="fmp",\n)\ndf = result.to_df()`,
     chart: { xKey: 'date', yKey: 'market_cap', label: 'AMZN Market Cap' }
   },
   { cat: 'Equities', name: 'Gainers (Today)', desc: 'Top gaining stocks',
     endpoint: '/api/v1/equity/discovery/gainers',
-    params: { sort: 'desc', provider: 'yfinance' }
+    params: { sort: 'desc', provider: 'yfinance' },
+    sdk: `from openbb import obb\n\n# Get today's top gaining stocks\nresult = obb.equity.discovery.gainers(\n    provider="yfinance",\n)\ndf = result.to_df()`
   },
   { cat: 'Equities', name: 'Losers (Today)', desc: 'Top losing stocks',
     endpoint: '/api/v1/equity/discovery/losers',
-    params: { sort: 'desc', provider: 'yfinance' }
+    params: { sort: 'desc', provider: 'yfinance' },
+    sdk: `from openbb import obb\n\n# Get today's top losing stocks\nresult = obb.equity.discovery.losers(\n    provider="yfinance",\n)\ndf = result.to_df()`
   },
   { cat: 'Equities', name: 'Stock Screener', desc: 'Screen by criteria',
     endpoint: '/api/v1/equity/screener',
-    params: { mkt_cap_min: '100000000000', beta_max: '1.5', provider: 'fmp' }
+    params: { mkt_cap_min: '100000000000', beta_max: '1.5', provider: 'fmp' },
+    sdk: `from openbb import obb\n\n# Screen stocks by criteria\nresult = obb.equity.screener(\n    mkt_cap_min=100000000000,\n    beta_max=1.5,\n    provider="fmp",\n)\ndf = result.to_df()`
   },
   { cat: 'Equities', name: 'Peer Comparison', desc: 'Comparable companies',
     endpoint: '/api/v1/equity/compare/peers',
-    params: { symbol: 'AAPL', provider: 'fmp' }
+    params: { symbol: 'AAPL', provider: 'fmp' },
+    sdk: `from openbb import obb\n\n# Get comparable peer companies for AAPL\nresult = obb.equity.compare.peers(\n    symbol="AAPL",\n    provider="fmp",\n)\ndf = result.to_df()`
   },
 
   // ── FUNDAMENTALS ──
   { cat: 'Fundamentals', name: 'Income Statement (AAPL)', desc: 'Annual P&L',
     endpoint: '/api/v1/equity/fundamental/income',
     params: { symbol: 'AAPL', period: 'annual', limit: '5', provider: 'fmp' },
-    blp: `# Bloomberg: Financials\n# Terminal: AAPL US <EQUITY> FA <GO>\n\nfields = [\n    "IS_INC_BEF_XO_ITEM",  # Net income\n    "SALES_REV_TURN",       # Revenue\n    "IS_OPER_INC",          # Operating income\n    "IS_GROSS_PROFIT",      # Gross profit\n    "IS_EPS_DILUTED",       # Diluted EPS\n    "IS_DILUTED_SHARES_OUT",# Diluted shares\n]\nrequest.set("periodicitySelection", "ANNUAL")`
+    blp: `# Bloomberg: Financials\n# Terminal: AAPL US <EQUITY> FA <GO>\n\nfields = [\n    "IS_INC_BEF_XO_ITEM",  # Net income\n    "SALES_REV_TURN",       # Revenue\n    "IS_OPER_INC",          # Operating income\n    "IS_GROSS_PROFIT",      # Gross profit\n    "IS_EPS_DILUTED",       # Diluted EPS\n    "IS_DILUTED_SHARES_OUT",# Diluted shares\n]\nrequest.set("periodicitySelection", "ANNUAL")`,
+    sdk: `from openbb import obb\n\n# Get income statement for AAPL\nresult = obb.equity.fundamental.income(\n    symbol="AAPL",\n    period="annual",\n    limit=5,\n    provider="fmp",\n)\ndf = result.to_df()`
   },
   { cat: 'Fundamentals', name: 'Balance Sheet (MSFT)', desc: 'Assets & liabilities',
     endpoint: '/api/v1/equity/fundamental/balance',
     params: { symbol: 'MSFT', period: 'annual', limit: '5', provider: 'fmp' },
-    blp: `# Bloomberg: Balance sheet\nfields = [\n    "BS_TOT_ASSET",         # Total assets\n    "BS_TOT_LIAB2",         # Total liabilities\n    "TOT_EQUITY",           # Total equity\n    "BS_CASH_NEAR_CASH_ITEM",# Cash & equivalents\n    "BS_LONG_TERM_BORROW",  # Long-term debt\n    "CURRENT_RATIO",\n    "DEBT_TO_EQUITY_FUND",\n]`
+    blp: `# Bloomberg: Balance sheet\nfields = [\n    "BS_TOT_ASSET",         # Total assets\n    "BS_TOT_LIAB2",         # Total liabilities\n    "TOT_EQUITY",           # Total equity\n    "BS_CASH_NEAR_CASH_ITEM",# Cash & equivalents\n    "BS_LONG_TERM_BORROW",  # Long-term debt\n    "CURRENT_RATIO",\n    "DEBT_TO_EQUITY_FUND",\n]`,
+    sdk: `from openbb import obb\n\n# Get balance sheet for MSFT\nresult = obb.equity.fundamental.balance(\n    symbol="MSFT",\n    period="annual",\n    limit=5,\n    provider="fmp",\n)\ndf = result.to_df()`
   },
   { cat: 'Fundamentals', name: 'Cash Flow (GOOGL)', desc: 'Operating / investing / financing',
     endpoint: '/api/v1/equity/fundamental/cash',
     params: { symbol: 'GOOGL', period: 'annual', limit: '5', provider: 'fmp' },
-    blp: `# Bloomberg: Cash flow statement\nfields = [\n    "CF_CASH_FROM_OPER",    # Operating CF\n    "CF_CAP_EXPEND_PRPTY",  # CapEx\n    "FREE_CASH_FLOW",       # Free cash flow\n    "CF_CASH_FROM_INV_ACT", # Investing CF\n    "CF_CASH_FROM_FNC_ACT", # Financing CF\n    "CF_DIV_PAID",          # Dividends paid\n]`
+    blp: `# Bloomberg: Cash flow statement\nfields = [\n    "CF_CASH_FROM_OPER",    # Operating CF\n    "CF_CAP_EXPEND_PRPTY",  # CapEx\n    "FREE_CASH_FLOW",       # Free cash flow\n    "CF_CASH_FROM_INV_ACT", # Investing CF\n    "CF_CASH_FROM_FNC_ACT", # Financing CF\n    "CF_DIV_PAID",          # Dividends paid\n]`,
+    sdk: `from openbb import obb\n\n# Get cash flow statement for GOOGL\nresult = obb.equity.fundamental.cash(\n    symbol="GOOGL",\n    period="annual",\n    limit=5,\n    provider="fmp",\n)\ndf = result.to_df()`
   },
   { cat: 'Fundamentals', name: 'Key Metrics (META)', desc: 'Valuation & efficiency ratios',
     endpoint: '/api/v1/equity/fundamental/metrics',
-    params: { symbol: 'META', period: 'annual', limit: '5', provider: 'fmp' }
+    params: { symbol: 'META', period: 'annual', limit: '5', provider: 'fmp' },
+    sdk: `from openbb import obb\n\n# Get key financial metrics for META\nresult = obb.equity.fundamental.metrics(\n    symbol="META",\n    provider="fmp",\n)\ndf = result.to_df()`
   },
   { cat: 'Fundamentals', name: 'Financial Ratios', desc: 'P/E, P/B, ROE, ROA etc.',
     endpoint: '/api/v1/equity/fundamental/ratios',
     params: { symbol: 'JPM', period: 'annual', limit: '5', provider: 'fmp' },
-    blp: `# Bloomberg: Valuation multiples\nfields = [\n    "PE_RATIO",             # P/E ratio\n    "PX_TO_BOOK_RATIO",     # P/B ratio\n    "RETURN_ON_EQY",        # ROE\n    "RETURN_ON_ASSET",      # ROA\n    "EBITDA_MARGIN",        # EBITDA margin\n    "NET_MARGIN",           # Net margin\n    "TRAIL_12M_EV_TO_SALES",# EV/Sales\n    "CURRENT_EV_TO_EBITDA", # EV/EBITDA\n]`
+    blp: `# Bloomberg: Valuation multiples\nfields = [\n    "PE_RATIO",             # P/E ratio\n    "PX_TO_BOOK_RATIO",     # P/B ratio\n    "RETURN_ON_EQY",        # ROE\n    "RETURN_ON_ASSET",      # ROA\n    "EBITDA_MARGIN",        # EBITDA margin\n    "NET_MARGIN",           # Net margin\n    "TRAIL_12M_EV_TO_SALES",# EV/Sales\n    "CURRENT_EV_TO_EBITDA", # EV/EBITDA\n]`,
+    sdk: `from openbb import obb\n\n# Get financial ratios for JPM\nresult = obb.equity.fundamental.ratios(\n    symbol="JPM",\n    period="annual",\n    limit=5,\n    provider="fmp",\n)\ndf = result.to_df()`
   },
   { cat: 'Fundamentals', name: 'EPS Estimates (NVDA)', desc: 'Analyst EPS consensus',
     endpoint: '/api/v1/equity/estimates/forward_eps',
-    params: { symbol: 'NVDA', provider: 'intrinio' }
+    params: { symbol: 'NVDA', provider: 'intrinio' },
+    sdk: `from openbb import obb\n\n# Get forward EPS estimates for NVDA\nresult = obb.equity.estimates.forward_eps(\n    symbol="NVDA",\n    provider="intrinio",\n)\ndf = result.to_df()`
   },
   { cat: 'Fundamentals', name: 'Price Targets', desc: 'Analyst price target consensus',
     endpoint: '/api/v1/equity/estimates/price_target',
     params: { symbol: 'AAPL', provider: 'fmp' },
-    blp: `# Bloomberg: Analyst estimates\n# Terminal: AAPL US <EQUITY> ANR <GO>\nfields = [\n    "BEST_TARGET_PRICE",    # Consensus target\n    "BEST_BUY_CNT",         # Buy ratings\n    "BEST_HOLD_CNT",        # Hold ratings  \n    "BEST_SELL_CNT",        # Sell ratings\n    "BEST_ANALYST_RATING",  # Consensus rating\n]`
+    blp: `# Bloomberg: Analyst estimates\n# Terminal: AAPL US <EQUITY> ANR <GO>\nfields = [\n    "BEST_TARGET_PRICE",    # Consensus target\n    "BEST_BUY_CNT",         # Buy ratings\n    "BEST_HOLD_CNT",        # Hold ratings  \n    "BEST_SELL_CNT",        # Sell ratings\n    "BEST_ANALYST_RATING",  # Consensus rating\n]`,
+    sdk: `from openbb import obb\n\n# Get analyst price targets for AAPL\nresult = obb.equity.estimates.price_target(\n    symbol="AAPL",\n    provider="fmp",\n)\ndf = result.to_df()`
   },
   { cat: 'Fundamentals', name: 'Insider Trades', desc: 'Form 4 insider transactions',
     endpoint: '/api/v1/equity/ownership/insider_trading',
-    params: { symbol: 'TSLA', provider: 'fmp' }
+    params: { symbol: 'TSLA', provider: 'fmp' },
+    sdk: `from openbb import obb\n\n# Get insider trading activity for TSLA\nresult = obb.equity.ownership.insider_trading(\n    symbol="TSLA",\n    provider="fmp",\n)\ndf = result.to_df()`
   },
   { cat: 'Fundamentals', name: 'Institutional Ownership', desc: '13F filer holdings',
     endpoint: '/api/v1/equity/ownership/institutional',
-    params: { symbol: 'AAPL', provider: 'fmp' }
+    params: { symbol: 'AAPL', provider: 'fmp' },
+    sdk: `from openbb import obb\n\n# Get institutional ownership for AAPL\nresult = obb.equity.ownership.institutional(\n    symbol="AAPL",\n    provider="fmp",\n)\ndf = result.to_df()`
   },
 
   // ── FIXED INCOME ──
   { cat: 'Fixed Income', name: 'Treasury Yield Curve', desc: 'Current US yield curve',
     endpoint: '/api/v1/fixedincome/government/yield_curve',
     params: { date: '2025-01-15', provider: 'fred' },
-    blp: `# Bloomberg: Yield curve\n# Terminal: YCRV <GO> — Yield curve monitor\n# or: GC <GO> — Generic rates\n\nsecurities = [\n    "USGG1M Index",  # 1-month\n    "USGG3M Index",  # 3-month\n    "USGG6M Index",  # 6-month\n    "USGG2YR Index", # 2-year\n    "USGG5YR Index", # 5-year\n    "USGG10YR Index",# 10-year\n    "USGG30YR Index",# 30-year\n]\nfields = ["PX_LAST", "YLD_YTM_MID"]`
+    blp: `# Bloomberg: Yield curve\n# Terminal: YCRV <GO> — Yield curve monitor\n# or: GC <GO> — Generic rates\n\nsecurities = [\n    "USGG1M Index",  # 1-month\n    "USGG3M Index",  # 3-month\n    "USGG6M Index",  # 6-month\n    "USGG2YR Index", # 2-year\n    "USGG5YR Index", # 5-year\n    "USGG10YR Index",# 10-year\n    "USGG30YR Index",# 30-year\n]\nfields = ["PX_LAST", "YLD_YTM_MID"]`,
+    sdk: `from openbb import obb\n\n# Get US Treasury yield curve\nresult = obb.fixedincome.government.yield_curve(\n    date="2025-01-15",\n    provider="fred",\n)\ndf = result.to_df()\nresult.to_chart()  # Visualize the curve`
   },
   { cat: 'Fixed Income', name: 'Treasury Rates', desc: 'FRED benchmark rates',
     endpoint: '/api/v1/fixedincome/government/treasury_rates',
     params: { start_date: '2024-01-01', provider: 'federal_reserve' },
+    sdk: `from openbb import obb\n\n# Get Treasury benchmark rates\nresult = obb.fixedincome.government.treasury_rates(\n    start_date="2024-01-01",\n    provider="federal_reserve",\n)\ndf = result.to_df()`,
     chart: { xKey: 'date', yKey: 'week_4', label: '4-Week T-Bill Yield' }
   },
   { cat: 'Fixed Income', name: 'SOFR Rate', desc: 'Secured Overnight Financing Rate',
     endpoint: '/api/v1/fixedincome/rate/sofr',
     params: { start_date: '2024-01-01', provider: 'fred' },
     chart: { xKey: 'date', yKey: 'rate', label: 'SOFR' },
-    blp: `# Bloomberg: Money market rates\n# Terminal: BTMM <GO> — Treasury & money market\n\nsecurities = [\n    "SOFRRATE Index",  # SOFR\n    "FEDL01 Index",    # Fed Funds effective\n    "USOSFR1 Curncy", # SOFR 1Y swap\n]\nfields = ["PX_LAST", "CHG_NET_1D"]`
+    blp: `# Bloomberg: Money market rates\n# Terminal: BTMM <GO> — Treasury & money market\n\nsecurities = [\n    "SOFRRATE Index",  # SOFR\n    "FEDL01 Index",    # Fed Funds effective\n    "USOSFR1 Curncy", # SOFR 1Y swap\n]\nfields = ["PX_LAST", "CHG_NET_1D"]`,
+    sdk: `from openbb import obb\n\n# Get SOFR rate history\nresult = obb.fixedincome.rate.sofr(\n    start_date="2024-01-01",\n    provider="fred",\n)\ndf = result.to_df()`
   },
   { cat: 'Fixed Income', name: 'EFFR Rate', desc: 'Effective Federal Funds Rate',
     endpoint: '/api/v1/fixedincome/rate/effr',
     params: { start_date: '2022-01-01', provider: 'fred' },
+    sdk: `from openbb import obb\n\n# Get Effective Federal Funds Rate\nresult = obb.fixedincome.rate.effr(\n    start_date="2022-01-01",\n    provider="fred",\n)\ndf = result.to_df()`,
     chart: { xKey: 'date', yKey: 'rate', label: 'EFFR' }
   },
   { cat: 'Fixed Income', name: 'Corporate Bond Prices', desc: 'Investment grade bonds',
     endpoint: '/api/v1/fixedincome/corporate/bond_prices',
     params: { provider: 'government_us' },
-    blp: `# Bloomberg: Corporate bonds\n# Terminal: SRCH <GO> — Bond search\n\nsecurity = "AAPL 3.85 05/04/43 Corp"\nfields = [\n    "YLD_YTM_MID",     # YTM\n    "DUR_MID",          # Duration\n    "CONVEXITY_MID",    # Convexity\n    "Z_SPRD_MID",       # Z-spread\n    "OAS_SPREAD_MID",   # OAS\n    "PX_MID",           # Mid price\n]`
+    blp: `# Bloomberg: Corporate bonds\n# Terminal: SRCH <GO> — Bond search\n\nsecurity = "AAPL 3.85 05/04/43 Corp"\nfields = [\n    "YLD_YTM_MID",     # YTM\n    "DUR_MID",          # Duration\n    "CONVEXITY_MID",    # Convexity\n    "Z_SPRD_MID",       # Z-spread\n    "OAS_SPREAD_MID",   # OAS\n    "PX_MID",           # Mid price\n]`,
+    sdk: `from openbb import obb\n\n# Get corporate bond prices\nresult = obb.fixedincome.corporate.bond_prices(\n    provider="government_us",\n)\ndf = result.to_df()`
   },
   { cat: 'Fixed Income', name: 'TIPS Yields', desc: 'Inflation-protected securities',
     endpoint: '/api/v1/fixedincome/government/tips_yields',
-    params: { start_date: '2024-01-01', provider: 'fred' }
+    params: { start_date: '2024-01-01', provider: 'fred' },
+    sdk: `from openbb import obb\n\n# Get TIPS yields\nresult = obb.fixedincome.government.tips_yields(\n    start_date="2024-01-01",\n    provider="fred",\n)\ndf = result.to_df()`
   },
   { cat: 'Fixed Income', name: 'Treasury Spreads (TCM)', desc: 'Constant maturity spreads',
     endpoint: '/api/v1/fixedincome/spreads/tcm',
-    params: { start_date: '2024-01-01', provider: 'fred' }
+    params: { start_date: '2024-01-01', provider: 'fred' },
+    sdk: `from openbb import obb\n\n# Get Treasury constant maturity spreads\nresult = obb.fixedincome.spreads.tcm(\n    start_date="2024-01-01",\n    provider="fred",\n)\ndf = result.to_df()`
   },
   { cat: 'Fixed Income', name: 'Svensson Yield Curve', desc: 'Model-fitted yield curve',
     endpoint: '/api/v1/fixedincome/government/svensson_yield_curve',
-    params: { start_date: '2024-01-01', provider: 'federal_reserve' }
+    params: { start_date: '2024-01-01', provider: 'federal_reserve' },
+    sdk: `from openbb import obb\n\n# Get Svensson model yield curve\nresult = obb.fixedincome.government.svensson_yield_curve(\n    start_date="2024-01-01",\n    provider="federal_reserve",\n)\ndf = result.to_df()`
   },
 
   // ── FX & CRYPTO ──
@@ -992,24 +1038,29 @@ const EXAMPLES = [
     endpoint: '/api/v1/currency/price/historical',
     params: { symbol: 'EURUSD', start_date: '2024-01-01', provider: 'fmp' },
     blp: `# Bloomberg: FX rates\n# Terminal: FXIP <GO> — FX information portal\n\nsecurities = [\n    "EURUSD Curncy",\n    "GBPUSD Curncy",\n    "USDJPY Curncy",\n    "USDCNY Curncy",\n    "AUDUSD Curncy",\n]\nfields = [\n    "PX_LAST", "PX_BID", "PX_ASK",\n    "TOT_RETURN_INDEX_GROSS_DVDS",\n    "CHG_PCT_1D", "HIGH_52WEEK", "LOW_52WEEK",\n]`,
+    sdk: `from openbb import obb\n\n# Get EUR/USD historical prices\nresult = obb.currency.price.historical(\n    symbol="EURUSD",\n    start_date="2024-01-01",\n    provider="fmp",\n)\ndf = result.to_df()`,
     chart: { xKey: 'date', yKey: 'close', label: 'EURUSD' }
   },
   { cat: 'FX & Crypto', name: 'FX Snapshots', desc: 'Multi-currency spot rates',
     endpoint: '/api/v1/currency/snapshots',
-    params: { base: 'USD', provider: 'fmp' }
+    params: { base: 'USD', provider: 'fmp' },
+    sdk: `from openbb import obb\n\n# Get multi-currency spot rate snapshots\nresult = obb.currency.snapshots(\n    base="USD",\n    provider="fmp",\n)\ndf = result.to_df()`
   },
   { cat: 'FX & Crypto', name: 'FX Reference Rates (ECB)', desc: 'European Central Bank daily rates',
     endpoint: '/api/v1/currency/reference_rates',
-    params: { provider: 'ecb' }
+    params: { provider: 'ecb' },
+    sdk: `from openbb import obb\n\n# Get ECB reference exchange rates\nresult = obb.currency.reference_rates(\n    provider="ecb",\n)\ndf = result.to_df()`
   },
   { cat: 'FX & Crypto', name: 'Bitcoin Historical', desc: 'BTC/USD daily prices',
     endpoint: '/api/v1/crypto/price/historical',
     params: { symbol: 'BTCUSD', start_date: '2024-01-01', provider: 'yfinance' },
+    sdk: `from openbb import obb\n\n# Get Bitcoin historical prices\nresult = obb.crypto.price.historical(\n    symbol="BTCUSD",\n    start_date="2024-01-01",\n    provider="yfinance",\n)\ndf = result.to_df()`,
     chart: { xKey: 'date', yKey: 'close', label: 'BTC/USD' }
   },
   { cat: 'FX & Crypto', name: 'Ethereum Historical', desc: 'ETH/USD daily prices',
     endpoint: '/api/v1/crypto/price/historical',
     params: { symbol: 'ETHUSD', start_date: '2024-01-01', provider: 'yfinance' },
+    sdk: `from openbb import obb\n\n# Get Ethereum historical prices\nresult = obb.crypto.price.historical(\n    symbol="ETHUSD",\n    start_date="2024-01-01",\n    provider="yfinance",\n)\ndf = result.to_df()`,
     chart: { xKey: 'date', yKey: 'close', label: 'ETH/USD' }
   },
 
@@ -1018,64 +1069,77 @@ const EXAMPLES = [
     endpoint: '/api/v1/economy/gdp/real',
     params: { units: 'yoy', start_date: '2010-01-01', provider: 'oecd' },
     blp: `# Bloomberg: Macroeconomic data\n# Terminal: ECOW <GO> — Economic calendar\n# or: WECO <GO> — World economic monitor\n\n# GDP indicators\nsecurities = [\n    "GDP CUR$ Index",    # US Nominal GDP\n    "GDPC1 Index",       # Real GDP (FRED)\n    "EHGDUS Index",      # Bloomberg GDP forecast\n]\nfields = [\n    "PX_LAST",\n    "ACTUAL_RELEASE",\n    "BN_SURVEY_MEDIAN",  # Survey consensus\n]`,
+    sdk: `from openbb import obb\n\n# Get US Real GDP growth rates\nresult = obb.economy.gdp.real(\n    units="yoy",\n    start_date="2010-01-01",\n    provider="oecd",\n)\ndf = result.to_df()`,
     chart: { xKey: 'date', yKey: 'value', label: 'Real GDP YoY' }
   },
   { cat: 'Macro', name: 'CPI Inflation', desc: 'Consumer price inflation',
     endpoint: '/api/v1/economy/cpi',
     params: { countries: 'united_states', start_date: '2015-01-01', frequency: 'monthly', provider: 'fred' },
     blp: `# Bloomberg: CPI data\n# Terminal: CPIYOY Index <GO>\n\nsecurities = [\n    "CPI INDX Index",    # US CPI All Items\n    "CPUPAXFE Index",    # CPI ex Food & Energy\n    "CPURNSA Index",     # CPI not seasonally adj\n    "CPUPXCHG Index",    # CPI MoM change\n]\nfields = ["PX_LAST", "ACTUAL_RELEASE", "BN_SURVEY_MEDIAN"]`,
+    sdk: `from openbb import obb\n\n# Get US CPI inflation data\nresult = obb.economy.cpi(\n    countries="united_states",\n    start_date="2015-01-01",\n    frequency="monthly",\n    provider="fred",\n)\ndf = result.to_df()`,
     chart: { xKey: 'date', yKey: 'value', label: 'CPI' }
   },
   { cat: 'Macro', name: 'Interest Rates (Global)', desc: 'Central bank policy rates',
     endpoint: '/api/v1/economy/interest_rates',
     params: { provider: 'oecd' },
-    blp: `# Bloomberg: Central bank rates\nsecurities = [\n    "FDTR Index",        # Fed Funds target\n    "EURR002W Index",    # ECB deposit rate\n    "UKBRBASE Index",    # BoE bank rate\n    "BOJDPBAL Index",    # BoJ policy rate\n]`
+    blp: `# Bloomberg: Central bank rates\nsecurities = [\n    "FDTR Index",        # Fed Funds target\n    "EURR002W Index",    # ECB deposit rate\n    "UKBRBASE Index",    # BoE bank rate\n    "BOJDPBAL Index",    # BoJ policy rate\n]`,
+    sdk: `from openbb import obb\n\n# Get global central bank interest rates\nresult = obb.economy.interest_rates(\n    provider="oecd",\n)\ndf = result.to_df()`
   },
   { cat: 'Macro', name: 'Economic Calendar', desc: 'Upcoming macro events',
     endpoint: '/api/v1/economy/calendar',
     params: { start_date: '2025-01-01', end_date: '2025-01-31', provider: 'fmp' },
-    blp: `# Bloomberg: Economic events\n# Terminal: ECO <GO> — Economic calendar\n# or: EVTS <GO> — Event calendar\n\nfields = [\n    "ECO_RELEASE_DT",\n    "ECO_RELEASE_TIME",\n    "ACTUAL_RELEASE",\n    "BN_SURVEY_MEDIAN",\n    "BN_SURVEY_PRIOR",\n    "ECO_REVISIONS",\n]`
+    blp: `# Bloomberg: Economic events\n# Terminal: ECO <GO> — Economic calendar\n# or: EVTS <GO> — Event calendar\n\nfields = [\n    "ECO_RELEASE_DT",\n    "ECO_RELEASE_TIME",\n    "ACTUAL_RELEASE",\n    "BN_SURVEY_MEDIAN",\n    "BN_SURVEY_PRIOR",\n    "ECO_REVISIONS",\n]`,
+    sdk: `from openbb import obb\n\n# Get upcoming economic calendar events\nresult = obb.economy.calendar(\n    start_date="2025-01-01",\n    end_date="2025-01-31",\n    provider="fmp",\n)\ndf = result.to_df()`
   },
   { cat: 'Macro', name: 'FOMC Documents', desc: 'Fed meeting minutes & statements',
     endpoint: '/api/v1/economy/fomc_documents',
-    params: { provider: 'federal_reserve' }
+    params: { provider: 'federal_reserve' },
+    sdk: `from openbb import obb\n\n# Get FOMC meeting documents\nresult = obb.economy.fomc_documents(\n    provider="federal_reserve",\n)\ndf = result.to_df()`
   },
   { cat: 'Macro', name: 'Money Supply (M2)', desc: 'Monetary aggregates',
     endpoint: '/api/v1/economy/money_measures',
-    params: { start_date: '2020-01-01', provider: 'fred' }
+    params: { start_date: '2020-01-01', provider: 'fred' },
+    sdk: `from openbb import obb\n\n# Get monetary aggregates (M2)\nresult = obb.economy.money_measures(\n    start_date="2020-01-01",\n    provider="fred",\n)\ndf = result.to_df()`
   },
   { cat: 'Macro', name: 'PCE Inflation', desc: 'Personal consumption expenditures',
     endpoint: '/api/v1/economy/pce',
-    params: { date: '2024-12-01', provider: 'fred' }
+    params: { date: '2024-12-01', provider: 'fred' },
+    sdk: `from openbb import obb\n\n# Get PCE inflation data\nresult = obb.economy.pce(\n    date="2024-12-01",\n    provider="fred",\n)\ndf = result.to_df()`
   },
   { cat: 'Macro', name: 'Nonfarm Payrolls', desc: 'BLS employment data',
     endpoint: '/api/v1/economy/survey/nonfarm_payrolls',
     params: { start_date: '2020-01-01', provider: 'fred' },
+    sdk: `from openbb import obb\n\n# Get nonfarm payrolls data\nresult = obb.economy.survey.nonfarm_payrolls(\n    start_date="2020-01-01",\n    provider="fred",\n)\ndf = result.to_df()`,
     chart: { xKey: 'date', yKey: 'value', label: 'Nonfarm Payrolls' }
   },
   { cat: 'Macro', name: 'Univ. of Michigan Sentiment', desc: 'Consumer confidence survey',
     endpoint: '/api/v1/economy/survey/university_of_michigan',
-    params: { start_date: '2020-01-01', provider: 'fred' }
+    params: { start_date: '2020-01-01', provider: 'fred' },
+    sdk: `from openbb import obb\n\n# Get University of Michigan consumer sentiment\nresult = obb.economy.survey.university_of_michigan(\n    start_date="2020-01-01",\n    provider="fred",\n)\ndf = result.to_df()`
   },
 
   // ── OPTIONS ──
   { cat: 'Options', name: 'Options Chain (AAPL)', desc: 'Full options chain',
     endpoint: '/api/v1/derivatives/options/chains',
     params: { symbol: 'AAPL', provider: 'cboe' },
-    blp: `# Bloomberg: Options\n# Terminal: OMON <GO> — Options monitor\n# or: OVDV <GO> — Volatility surface\n\n# Options chain for AAPL\nfields = [\n    "OPT_STRIKE_PX",         # Strike price\n    "OPT_EXPIRE_DT",         # Expiry date\n    "OPT_PUT_CALL",          # Put or Call\n    "PX_MID",                # Mid price\n    "OPT_IMPLIED_VOLATILITY_BSM", # IV\n    "OPT_DELTA",             # Delta\n    "OPT_GAMMA",             # Gamma\n    "OPT_THETA",             # Theta\n    "OPT_VEGA",              # Vega\n    "OPT_OPEN_INT",          # Open interest\n]`
+    blp: `# Bloomberg: Options\n# Terminal: OMON <GO> — Options monitor\n# or: OVDV <GO> — Volatility surface\n\n# Options chain for AAPL\nfields = [\n    "OPT_STRIKE_PX",         # Strike price\n    "OPT_EXPIRE_DT",         # Expiry date\n    "OPT_PUT_CALL",          # Put or Call\n    "PX_MID",                # Mid price\n    "OPT_IMPLIED_VOLATILITY_BSM", # IV\n    "OPT_DELTA",             # Delta\n    "OPT_GAMMA",             # Gamma\n    "OPT_THETA",             # Theta\n    "OPT_VEGA",              # Vega\n    "OPT_OPEN_INT",          # Open interest\n]`,
+    sdk: `from openbb import obb\n\n# Get full options chain for AAPL\nresult = obb.derivatives.options.chains(\n    symbol="AAPL",\n    provider="cboe",\n)\ndf = result.to_df()`
   },
   { cat: 'Options', name: 'Volatility Surface', desc: 'Implied vol by strike/expiry',
     endpoint: '/api/v1/derivatives/options/surface',
-    params: { symbol: 'SPY', provider: 'cboe' }
+    params: { symbol: 'SPY', provider: 'cboe' },
+    sdk: `from openbb import obb\n\n# Get implied volatility surface for SPY\nresult = obb.derivatives.options.surface(\n    symbol="SPY",\n    provider="cboe",\n)\ndf = result.to_df()`
   },
   { cat: 'Options', name: 'Unusual Options Activity', desc: 'High volume option trades',
     endpoint: '/api/v1/derivatives/options/unusual',
-    params: { provider: 'intrinio' }
+    params: { provider: 'intrinio' },
+    sdk: `from openbb import obb\n\n# Get unusual options activity\nresult = obb.derivatives.options.unusual(\n    provider="intrinio",\n)\ndf = result.to_df()`
   },
   { cat: 'Options', name: 'Futures Curve (Oil)', desc: 'Crude oil futures term structure',
     endpoint: '/api/v1/derivatives/futures/curve',
     params: { symbol: 'CL', provider: 'yfinance' },
-    blp: `# Bloomberg: Futures\n# Terminal: WCL <GO> — Generic front month CL\n# or: COMS <GO> — Commodity screen\n\nsecurities = [\n    "CLF5 Comdty",  # Jan 2025\n    "CLG5 Comdty",  # Feb 2025\n    "CLH5 Comdty",  # Mar 2025\n]\nfields = ["PX_LAST", "FUT_DAYS_EXPIRE", "OPEN_INT"]`
+    blp: `# Bloomberg: Futures\n# Terminal: WCL <GO> — Generic front month CL\n# or: COMS <GO> — Commodity screen\n\nsecurities = [\n    "CLF5 Comdty",  # Jan 2025\n    "CLG5 Comdty",  # Feb 2025\n    "CLH5 Comdty",  # Mar 2025\n]\nfields = ["PX_LAST", "FUT_DAYS_EXPIRE", "OPEN_INT"]`,
+    sdk: `from openbb import obb\n\n# Get crude oil futures curve\nresult = obb.derivatives.futures.curve(\n    symbol="CL",\n    provider="yfinance",\n)\ndf = result.to_df()`
   },
 
   // ── INDICES ──
@@ -1083,80 +1147,104 @@ const EXAMPLES = [
     endpoint: '/api/v1/equity/price/historical',
     params: { symbol: 'SPY', start_date: '2020-01-01', provider: 'yfinance' },
     blp: `# Bloomberg: Index data\n# Terminal: SPX Index <GO> or INDU Index <GO>\n\nsecurities = [\n    "SPX Index",     # S&P 500\n    "INDU Index",    # Dow Jones\n    "CCMP Index",    # NASDAQ Composite\n    "RTY Index",     # Russell 2000\n    "SX5E Index",    # Euro Stoxx 50\n    "NKY Index",     # Nikkei 225\n    "HSI Index",     # Hang Seng\n]\nfields = ["PX_LAST", "PX_OPEN", "PX_HIGH", "PX_LOW", "VOLUME", "CHG_PCT_1D"]`,
+    sdk: `from openbb import obb\n\n# Get S&P 500 (SPY) historical prices\nresult = obb.equity.price.historical(\n    symbol="SPY",\n    start_date="2020-01-01",\n    provider="yfinance",\n)\ndf = result.to_df()`,
     chart: { xKey: 'date', yKey: 'close', label: 'SPY' }
   },
   { cat: 'Indices', name: 'VIX Volatility', desc: 'CBOE volatility index',
     endpoint: '/api/v1/equity/price/historical',
     params: { symbol: '^VIX', start_date: '2023-01-01', provider: 'yfinance' },
+    sdk: `from openbb import obb\n\n# Get VIX volatility index history\nresult = obb.equity.price.historical(\n    symbol="^VIX",\n    start_date="2023-01-01",\n    provider="yfinance",\n)\ndf = result.to_df()`,
     chart: { xKey: 'date', yKey: 'close', label: 'VIX' }
   },
   { cat: 'Indices', name: 'Index Snapshots', desc: 'Multi-index real-time snapshot',
     endpoint: '/api/v1/equity/market_snapshots',
-    params: { provider: 'yfinance' }
+    params: { provider: 'yfinance' },
+    sdk: `from openbb import obb\n\n# Get multi-index market snapshots\nresult = obb.equity.market_snapshots(\n    provider="yfinance",\n)\ndf = result.to_df()`
   },
   { cat: 'Indices', name: 'Sector Comparison', desc: 'Compare sector ETFs',
     endpoint: '/api/v1/equity/compare/groups',
-    params: { group: 'sector', metric: 'performance', provider: 'finviz' }
+    params: { group: 'sector', metric: 'performance', provider: 'finviz' },
+    sdk: `from openbb import obb\n\n# Compare sector performance\nresult = obb.equity.compare.groups(\n    group="sector",\n    metric="performance",\n    provider="finviz",\n)\ndf = result.to_df()`
   },
 
   // ── COMMODITIES ──
   { cat: 'Commodities', name: 'Commodity Spot Prices', desc: 'Gold, Oil, Copper etc.',
     endpoint: '/api/v1/commodity/price/spot',
     params: { start_date: '2024-01-01', provider: 'fred' },
-    blp: `# Bloomberg: Commodities\n# Terminal: COMS <GO> — Commodity screen\n# or: COMDTY <GO> — Commodity monitor\n\nsecurities = [\n    "GC1 Comdty",   # Gold\n    "SI1 Comdty",   # Silver\n    "CL1 Comdty",   # WTI Crude\n    "CO1 Comdty",   # Brent Crude\n    "NG1 Comdty",   # Natural Gas\n    "HG1 Comdty",   # Copper\n    "ZW1 Comdty",   # Wheat\n    "ZS1 Comdty",   # Soybeans\n]\nfields = ["PX_LAST", "CHG_PCT_1D", "VOLUME"]`
+    blp: `# Bloomberg: Commodities\n# Terminal: COMS <GO> — Commodity screen\n# or: COMDTY <GO> — Commodity monitor\n\nsecurities = [\n    "GC1 Comdty",   # Gold\n    "SI1 Comdty",   # Silver\n    "CL1 Comdty",   # WTI Crude\n    "CO1 Comdty",   # Brent Crude\n    "NG1 Comdty",   # Natural Gas\n    "HG1 Comdty",   # Copper\n    "ZW1 Comdty",   # Wheat\n    "ZS1 Comdty",   # Soybeans\n]\nfields = ["PX_LAST", "CHG_PCT_1D", "VOLUME"]`,
+    sdk: `from openbb import obb\n\n# Get commodity spot prices\nresult = obb.commodity.price.spot(\n    start_date="2024-01-01",\n    provider="fred",\n)\ndf = result.to_df()`
   },
   { cat: 'Commodities', name: 'EIA Weekly Oil Report', desc: 'Petroleum status report',
     endpoint: '/api/v1/commodity/petroleum_status_report',
-    params: { category: 'weekly_estimates', provider: 'eia' }
+    params: { category: 'weekly_estimates', provider: 'eia' },
+    sdk: `from openbb import obb\n\n# Get EIA weekly petroleum status report\nresult = obb.commodity.petroleum_status_report(\n    category="weekly_estimates",\n    provider="eia",\n)\ndf = result.to_df()`
   },
   { cat: 'Commodities', name: 'Short-Term Energy Outlook', desc: 'EIA energy forecast',
     endpoint: '/api/v1/commodity/short_term_energy_outlook',
-    params: { provider: 'eia' }
+    params: { provider: 'eia' },
+    sdk: `from openbb import obb\n\n# Get EIA short-term energy outlook\nresult = obb.commodity.short_term_energy_outlook(\n    provider="eia",\n)\ndf = result.to_df()`
   },
 
   // ── ETF ──
   { cat: 'ETF', name: 'ETF Info (SPY)', desc: 'Fund details & metadata',
-    endpoint: '/api/v1/etf/info', params: { symbol: 'SPY', provider: 'fmp' } },
+    endpoint: '/api/v1/etf/info', params: { symbol: 'SPY', provider: 'fmp' },
+    sdk: `from openbb import obb\n\n# Get ETF fund details for SPY\nresult = obb.etf.info(\n    symbol="SPY",\n    provider="fmp",\n)\ndf = result.to_df()` },
   { cat: 'ETF', name: 'ETF Holdings (QQQ)', desc: 'Top holdings & weights',
-    endpoint: '/api/v1/etf/holdings', params: { symbol: 'QQQ', provider: 'fmp' } },
+    endpoint: '/api/v1/etf/holdings', params: { symbol: 'QQQ', provider: 'fmp' },
+    sdk: `from openbb import obb\n\n# Get ETF holdings for QQQ\nresult = obb.etf.holdings(\n    symbol="QQQ",\n    provider="fmp",\n)\ndf = result.to_df()` },
   { cat: 'ETF', name: 'ETF Search', desc: 'Search ETFs by keyword',
-    endpoint: '/api/v1/etf/search', params: { query: 'technology', provider: 'fmp' } },
+    endpoint: '/api/v1/etf/search', params: { query: 'technology', provider: 'fmp' },
+    sdk: `from openbb import obb\n\n# Search ETFs by keyword\nresult = obb.etf.search(\n    query="technology",\n    provider="fmp",\n)\ndf = result.to_df()` },
   { cat: 'ETF', name: 'ETF Historical (IEF)', desc: 'Bond ETF price history',
     endpoint: '/api/v1/etf/historical', params: { symbol: 'IEF', start_date: '2024-01-01', provider: 'yfinance' },
+    sdk: `from openbb import obb\n\n# Get ETF historical prices for IEF\nresult = obb.etf.historical(\n    symbol="IEF",\n    start_date="2024-01-01",\n    provider="yfinance",\n)\ndf = result.to_df()`,
     chart: { xKey: 'date', yKey: 'close', label: 'IEF' } },
   { cat: 'ETF', name: 'ETF Sectors', desc: 'Sector allocation breakdown',
-    endpoint: '/api/v1/etf/sectors', params: { symbol: 'SPY', provider: 'fmp' } },
+    endpoint: '/api/v1/etf/sectors', params: { symbol: 'SPY', provider: 'fmp' },
+    sdk: `from openbb import obb\n\n# Get ETF sector allocation for SPY\nresult = obb.etf.sectors(\n    symbol="SPY",\n    provider="fmp",\n)\ndf = result.to_df()` },
   { cat: 'ETF', name: 'ETF Countries', desc: 'Geographic exposure',
-    endpoint: '/api/v1/etf/countries', params: { symbol: 'EEM', provider: 'fmp' } },
+    endpoint: '/api/v1/etf/countries', params: { symbol: 'EEM', provider: 'fmp' },
+    sdk: `from openbb import obb\n\n# Get ETF geographic exposure for EEM\nresult = obb.etf.countries(\n    symbol="EEM",\n    provider="fmp",\n)\ndf = result.to_df()` },
 
   // ── NEWS & SENTIMENT ──
   { cat: 'News', name: 'Company News (AAPL)', desc: 'Latest news for a ticker',
-    endpoint: '/api/v1/news/company', params: { symbols: 'AAPL', limit: '20', provider: 'fmp' } },
+    endpoint: '/api/v1/news/company', params: { symbols: 'AAPL', limit: '20', provider: 'fmp' },
+    sdk: `from openbb import obb\n\n# Get latest company news for AAPL\nresult = obb.news.company(\n    symbols="AAPL",\n    limit=20,\n    provider="fmp",\n)\ndf = result.to_df()` },
   { cat: 'News', name: 'World News', desc: 'Global financial headlines',
-    endpoint: '/api/v1/news/world', params: { limit: '20', provider: 'fmp' } },
+    endpoint: '/api/v1/news/world', params: { limit: '20', provider: 'fmp' },
+    sdk: `from openbb import obb\n\n# Get global financial news headlines\nresult = obb.news.world(\n    limit=20,\n    provider="fmp",\n)\ndf = result.to_df()` },
   { cat: 'News', name: 'Earnings Surprises', desc: 'EPS beat/miss history',
-    endpoint: '/api/v1/equity/estimates/consensus', params: { symbol: 'MSFT', provider: 'fmp' } },
+    endpoint: '/api/v1/equity/estimates/consensus', params: { symbol: 'MSFT', provider: 'fmp' },
+    sdk: `from openbb import obb\n\n# Get earnings consensus estimates for MSFT\nresult = obb.equity.estimates.consensus(\n    symbol="MSFT",\n    provider="fmp",\n)\ndf = result.to_df()` },
 
   // ── EQUITY EXTENDED ──
   { cat: 'Equities', name: 'Short Interest', desc: 'Short float & days to cover',
-    endpoint: '/api/v1/equity/short_interest', params: { symbol: 'GME', provider: 'finra' } },
+    endpoint: '/api/v1/equity/short_interest', params: { symbol: 'GME', provider: 'finra' },
+    sdk: `from openbb import obb\n\n# Get short interest data for GME\nresult = obb.equity.short_interest(\n    symbol="GME",\n    provider="finra",\n)\ndf = result.to_df()` },
   { cat: 'Equities', name: 'ESG Scores', desc: 'Environmental, Social, Governance',
-    endpoint: '/api/v1/equity/fundamental/esg', params: { symbol: 'MSFT', provider: 'fmp' } },
+    endpoint: '/api/v1/equity/fundamental/esg', params: { symbol: 'MSFT', provider: 'fmp' },
+    sdk: `from openbb import obb\n\n# Get ESG scores for MSFT\nresult = obb.equity.fundamental.esg(\n    symbol="MSFT",\n    provider="fmp",\n)\ndf = result.to_df()` },
   { cat: 'Equities', name: 'Revenue Segments', desc: 'Revenue by geography/product',
-    endpoint: '/api/v1/equity/fundamental/revenue_per_segment', params: { symbol: 'AAPL', provider: 'fmp' } },
+    endpoint: '/api/v1/equity/fundamental/revenue_per_segment', params: { symbol: 'AAPL', provider: 'fmp' },
+    sdk: `from openbb import obb\n\n# Get revenue by segment for AAPL\nresult = obb.equity.fundamental.revenue_per_segment(\n    symbol="AAPL",\n    provider="fmp",\n)\ndf = result.to_df()` },
   { cat: 'Equities', name: 'Analyst Upgrades', desc: 'Recent rating changes',
-    endpoint: '/api/v1/equity/estimates/analyst_search', params: { analyst_name: 'Goldman', provider: 'fmp' } },
+    endpoint: '/api/v1/equity/estimates/analyst_search', params: { analyst_name: 'Goldman', provider: 'fmp' },
+    sdk: `from openbb import obb\n\n# Search for analyst ratings by firm\nresult = obb.equity.estimates.analyst_search(\n    analyst_name="Goldman",\n    provider="fmp",\n)\ndf = result.to_df()` },
 
   // ── MACRO EXTENDED ──
   { cat: 'Macro', name: 'Unemployment Rate', desc: 'US unemployment series',
     endpoint: '/api/v1/economy/survey/unemployment', params: { start_date: '2015-01-01', provider: 'fred' },
+    sdk: `from openbb import obb\n\n# Get US unemployment rate\nresult = obb.economy.survey.unemployment(\n    start_date="2015-01-01",\n    provider="fred",\n)\ndf = result.to_df()`,
     chart: { xKey: 'date', yKey: 'value', label: 'Unemployment %' } },
   { cat: 'Macro', name: 'Retail Sales', desc: 'Monthly retail trade data',
-    endpoint: '/api/v1/economy/survey/retail_sales', params: { start_date: '2020-01-01', provider: 'fred' } },
+    endpoint: '/api/v1/economy/survey/retail_sales', params: { start_date: '2020-01-01', provider: 'fred' },
+    sdk: `from openbb import obb\n\n# Get monthly retail sales data\nresult = obb.economy.survey.retail_sales(\n    start_date="2020-01-01",\n    provider="fred",\n)\ndf = result.to_df()` },
   { cat: 'Macro', name: 'Housing Starts', desc: 'New residential construction',
-    endpoint: '/api/v1/economy/survey/university_of_michigan', params: { start_date: '2015-01-01', provider: 'fred' } },
+    endpoint: '/api/v1/economy/survey/university_of_michigan', params: { start_date: '2015-01-01', provider: 'fred' },
+    sdk: `from openbb import obb\n\n# Get University of Michigan survey data\nresult = obb.economy.survey.university_of_michigan(\n    start_date="2015-01-01",\n    provider="fred",\n)\ndf = result.to_df()` },
   { cat: 'Macro', name: 'Balance of Payments', desc: 'Trade balance & current account',
-    endpoint: '/api/v1/economy/balance_of_payments', params: { provider: 'ecb' } },
+    endpoint: '/api/v1/economy/balance_of_payments', params: { provider: 'ecb' },
+    sdk: `from openbb import obb\n\n# Get balance of payments data\nresult = obb.economy.balance_of_payments(\n    provider="ecb",\n)\ndf = result.to_df()` },
 ];
 
 // ─── Sidebar ──────────────────────────────────────────────────────────────────
@@ -1230,8 +1318,13 @@ function loadExample(i) {
   document.getElementById('url-input').value = location.origin + ex.endpoint;
   renderParams(ex.params || {});
   buildSidebar(document.getElementById('search-input').value);
-  if (ex.blp) renderBlp(ex.blp, ex);
-  else document.getElementById('blp-view').innerHTML = '<span style="color:var(--text3)">No Bloomberg code example for this endpoint.</span>';
+  if (currentApi === 'openbb' && ex.sdk) {
+    renderBlp(ex.sdk, ex, true);
+  } else if (ex.blp) {
+    renderBlp(ex.blp, ex, false);
+  } else {
+    document.getElementById('blp-view').innerHTML = '<span style="color:var(--text3)">No code example for this endpoint.</span>';
+  }
   renderExcel();
   if (typeof renderBridge === 'function') renderBridge();
 }
@@ -1562,7 +1655,7 @@ function renderChart(data) {
 }
 
 // ─── Bloomberg code renderer ──────────────────────────────────────────────────
-function renderBlp(code, ex) {
+function renderBlp(code, ex, isOpenBBSdk) {
   const keywords = ['import', 'from', 'def', 'class', 'for', 'if', 'else', 'return', 'with', 'as', 'in', 'and', 'or', 'not'];
   let html = code
     .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
@@ -1574,8 +1667,9 @@ function renderBlp(code, ex) {
     html = html.replace(new RegExp(`\\b(${kw})\\b`, 'g'), '<span class="blp-keyword">$1</span>');
   });
 
+  const sectionTitle = isOpenBBSdk ? 'OpenBB Python SDK' : 'Bloomberg Terminal / BLPAPI Equivalent';
   const blpView = document.getElementById('blp-view');
-  blpView.innerHTML = `<div class="blp-section">Bloomberg Terminal / BLPAPI Equivalent</div>\n` + html;
+  blpView.innerHTML = `<div class="blp-section">${sectionTitle}</div>\n` + html;
 }
 
 // ─── Excel formula renderer ───────────────────────────────────────────────────
@@ -1593,6 +1687,32 @@ function xlDateFmt(d) { // YYYY-MM-DD → M/D/YYYY
 
 function renderExcel() {
   const view = document.getElementById('excel-view');
+
+  // When on OpenBB, show Python SDK code instead of Bloomberg Excel formulas
+  if (currentApi === 'openbb') {
+    const ex = currentExample !== null ? getExamples()[currentExample] : null;
+    let html = '<div class="xl-section">OpenBB Python SDK</div>';
+    html += `<div style="color:var(--text3);font-size:10px;font-family:var(--mono);margin-bottom:12px;">Install and use the OpenBB Python SDK to access the same data programmatically.</div>`;
+    html += `<pre class="bridge-code" onclick="navigator.clipboard.writeText(this.textContent)" title="Click to copy" style="margin-bottom:12px">pip install openbb</pre>`;
+    html += `<div class="xl-section">Setup</div>`;
+    html += `<pre class="bridge-code" onclick="navigator.clipboard.writeText(this.textContent)" title="Click to copy" style="margin-bottom:12px">from openbb import obb
+
+# Configure providers (one-time setup)
+obb.account.login(pat="YOUR_PAT")
+
+# Or set individual provider keys:
+# import openbb
+# openbb.obb.user.credentials.fmp_api_key = "YOUR_KEY"
+# openbb.obb.user.credentials.polygon_api_key = "YOUR_KEY"</pre>`;
+    if (ex && ex.sdk) {
+      html += `<div class="xl-section">Current Example</div>`;
+      html += `<pre class="bridge-code" onclick="navigator.clipboard.writeText(this.textContent)" title="Click to copy">${ex.sdk.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')}</pre>`;
+    }
+    html += `<div class="xl-copy-hint">Click any code block to copy to clipboard</div>`;
+    view.innerHTML = html;
+    return;
+  }
+
   let urlStr = document.getElementById('url-input').value;
   let endpoint = '', p = {};
   try {
