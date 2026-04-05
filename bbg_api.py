@@ -809,12 +809,12 @@ AI_PROVIDERS = {
     },
     "openai": {
         "env_key": "OPENAI_API_KEY",
-        "default_model": "gpt-4o",
+        "default_model": "o3-mini",
         "base_url": "https://api.openai.com",
     },
     "google": {
         "env_key": "GOOGLE_API_KEY",
-        "default_model": "gemini-2.5-flash",
+        "default_model": "gemini-2.5-pro",
         "base_url": "https://generativelanguage.googleapis.com",
     },
 }
