@@ -587,6 +587,31 @@ def security_lookup(
 
 # ── BQL helpers ───────────────────────────────────────────────────────────────
 
+def _split_top_level_commas(s: str) -> list[str]:
+    """Split on commas that are NOT inside parentheses or brackets.
+
+    Needed because BQL override values can themselves be function calls,
+    e.g. FPO=range(-11Q,0Q) — naive split would tokenize as
+    ['FPO=range(-11Q', '0Q)'] and silently corrupt the formula.
+    """
+    parts, buf, depth = [], [], 0
+    for ch in s:
+        if ch in '([':
+            depth += 1
+            buf.append(ch)
+        elif ch in ')]':
+            depth -= 1
+            buf.append(ch)
+        elif ch == ',' and depth == 0:
+            parts.append(''.join(buf))
+            buf = []
+        else:
+            buf.append(ch)
+    if buf:
+        parts.append(''.join(buf))
+    return parts
+
+
 def _parse_bql(query: str):
     """
     Parse a BQL expression into (field, overrides_dict, securities_list).
@@ -595,15 +620,19 @@ def _parse_bql(query: str):
     """
     field, overrides, securities = None, {}, []
     # Extract field and its overrides from get(FIELD(K=V,...))
-    # Use balanced matching to handle nested parens like range(-3Q,0Q)
     m = _re.search(r'get\((\w+)\((.+)\)\s*\)\s*for', query, _re.IGNORECASE)
     if m:
         field = m.group(1)
-        for kv in m.group(2).split(','):
+        for kv in _split_top_level_commas(m.group(2)):
             kv = kv.strip()
             if '=' in kv:
                 k, v = kv.split('=', 1)
                 overrides[k.strip()] = v.strip()
+    # Also handle BQL with no overrides: get(FIELD) for(...)
+    if field is None:
+        m2 = _re.search(r'get\((\w+)\s*\)\s*for', query, _re.IGNORECASE)
+        if m2:
+            field = m2.group(1)
     # Extract securities from for([...])
     sec_m = _re.findall(r"'([^']+)'", query)
     securities = sec_m
@@ -980,7 +1009,23 @@ For any other field — including ALL operational/KPI fields (deliveries, subscr
 - BDP: =BDP("AAPL US Equity","PX_LAST")
 - BDH (array, Ctrl+Shift+Enter): =BDH("AAPL US Equity","PX_LAST","20250101","20260103","periodicitySelection=DAILY")
 - BDS (array): =BDS("SPX Index","INDX_MEMBERS")
-- BQL: =BQL("AAPL US Equity","FIELD_NAME","FPT=Q","FPO=0Q") — only after confirming the field via fields_search.
+- BQL Excel Add-in syntax — STRICT RULES:
+  * The Bloomberg Excel Add-in `=BQL()` function takes the universe as a plain ticker string,
+    the field as a plain mnemonic, and each override as its own quoted argument.
+  * CORRECT: =BQL("TSLA US Equity","SALES_REV_TURN","FPT=Q","FPO=range(-11Q,0Q)","FS=MRC")
+  * WRONG (do NOT emit any of these forms — they are BQuant Python syntax, not Excel):
+      =BQL("univ('TSLA US Equity')", ...)        ← univ() does not exist in Excel =BQL()
+      =BQL("members('SPX Index')", ...)          ← same problem
+      =BQL("TSLA US Equity","FIELD(FPT=Q,...)")  ← never cram overrides inside the field arg
+      =BQL.Query("get(...) for(...)")            ← BQuant only, not Excel Add-in
+  * Before suggesting ANY =BQL() formula for a KPI / operational / fiscal-period field
+    (deliveries, units sold, subscribers, store count, ARR, MAU, etc.), you MUST first call
+    the `bql` tool with a `get(FIELD(...)) for([...])` query. If the tool response includes
+    an `excel_formula` field, copy it VERBATIM into your reply. Do not edit, reformat, or
+    reconstruct the formula — the tool's version is the only validated form.
+  * If the `bql` tool returns `bql_unavailable` or empty results, tell the user the field is
+    not retrievable on this Terminal and offer the verbatim formula from the tool response so
+    they can paste it into Excel themselves. Do NOT invent a different formula.
 
 ## Workflow for a typical user question:
 
@@ -1042,9 +1087,17 @@ CHAT_TOOL_DEFS = [
     },
     {
         "name": "bql",
-        "description": "Bloomberg Query Language - operational/KPI/fiscal data not available via BDP. Returns 503 with structured fallback if not licensed on this Terminal.",
+        "description": (
+            "Bloomberg Query Language - operational/KPI/fiscal data (vehicle deliveries, "
+            "subscribers, units sold, store count, ARR, MAU, etc.) not available via BDP. "
+            "Required syntax: get(FIELD(K=V,...)) for(['TICKER']). When the response includes "
+            "an 'excel_formula' field you MUST copy that string verbatim into your reply — "
+            "it is the only validated Excel Add-in form. Never construct your own =BQL() "
+            "string by hand and never wrap the universe in univ(...) or members(...) — those "
+            "are BQuant Python idioms and they are invalid in the Excel Add-in."
+        ),
         "params": {
-            "query": {"type": "string", "description": "BQL expression, e.g. get(NUMBER_OF_VEHICLES_SOLD(FPT=Q,FPO=0Q)) for(['TSLA US Equity'])"},
+            "query": {"type": "string", "description": "BQL expression, e.g. get(NUMBER_OF_VEHICLES_SOLD(FPT=Q,FPO=range(-11Q,0Q),ACT_EST_MAPPING=PRECISE,FS=MRC)) for(['TSLA US Equity'])"},
         },
         "required": ["query"],
     },
