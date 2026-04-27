@@ -2648,7 +2648,40 @@ async function sendChat() {
   div.appendChild(bubble);
   msgs.appendChild(div);
 
-  let fullText = '';
+  // segments: ordered list of {type:'text', text} | {type:'tool', id, name, input, output, status}
+  // The bubble is always rebuilt from this array so tool blocks survive each rerender.
+  const segments = [];
+  const toolById = {};
+  const escHtml = s => String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+
+  function fullTextOf() {
+    return segments.filter(s => s.type === 'text').map(s => s.text).join('');
+  }
+  function rebuild(withButtons) {
+    let html = '';
+    for (const s of segments) {
+      if (s.type === 'text') {
+        html += renderChatContent(s.text, withButtons);
+      } else {
+        const inputStr = escHtml(JSON.stringify(s.input || {}));
+        let resultBlock;
+        if (s.status === 'pending') {
+          resultBlock = `<div class="chat-tool-status" style="color:var(--text3);font-size:10px;">running…</div>`;
+        } else {
+          let pretty = s.output || '';
+          try { pretty = JSON.stringify(JSON.parse(pretty), null, 2); } catch {}
+          if (pretty.length > 4000) pretty = pretty.slice(0, 4000) + '\n…[truncated]';
+          resultBlock = `<details><summary style="cursor:pointer;color:var(--green);font-size:10px;">result (${(s.output||'').length} chars)</summary><pre style="margin-top:4px;max-height:280px;overflow:auto;font-size:10px;background:var(--bg);border:1px solid var(--border);padding:6px;border-radius:3px;">${escHtml(pretty)}</pre></details>`;
+        }
+        html += `<div class="chat-tool" style="margin:6px 0;padding:6px 8px;border-left:2px solid var(--amber);background:var(--bg);border-radius:3px;font-family:var(--mono);font-size:11px;">
+          <div style="color:var(--amber);">&#128295; <strong>${escHtml(s.name)}</strong>(<span style="color:var(--text2);">${inputStr}</span>)</div>
+          <div style="margin-top:4px;">${resultBlock}</div>
+        </div>`;
+      }
+    }
+    bubble.innerHTML = html;
+  }
+
   try {
     const res = await fetch(`${BBG_CHAT_BASE}/chat`, {
       method: 'POST',
@@ -2674,24 +2707,36 @@ async function sendChat() {
         const data = line.slice(6);
         if (data === '[DONE]') break;
         try {
-          const { text } = JSON.parse(data);
-          fullText += text;
-          bubble.innerHTML = renderChatContent(fullText);
+          const evt = JSON.parse(data);
+          const t = evt.type || (typeof evt.text === 'string' ? 'text' : null);
+          if (t === 'text') {
+            const last = segments[segments.length - 1];
+            if (last && last.type === 'text') last.text += (evt.text || '');
+            else segments.push({ type: 'text', text: evt.text || '' });
+          } else if (t === 'tool_use') {
+            const seg = { type: 'tool', id: evt.id, name: evt.name, input: evt.input || {}, output: '', status: 'pending' };
+            segments.push(seg);
+            toolById[evt.id] = seg;
+          } else if (t === 'tool_result') {
+            const seg = toolById[evt.id];
+            if (seg) { seg.output = evt.output || ''; seg.status = 'done'; }
+          }
+          rebuild(false);
           msgs.scrollTop = msgs.scrollHeight;
         } catch {}
       }
     }
-    // Re-render final text with inline load buttons
-    bubble.innerHTML = renderChatContent(fullText, true);
-    // If the response contains Excel formulas, append a shortcut button to the Excel tab
+    // Final render with run buttons enabled on text segments
+    rebuild(true);
+    const fullText = fullTextOf();
     if (/```\s*[Ee]xcel/i.test(fullText) || /=BD[PHSp]\(/i.test(fullText)) {
       const xlBtn = document.createElement('div');
       xlBtn.style.cssText = 'margin-top:8px;';
       xlBtn.innerHTML = `<button onclick="switchTab('excel')" style="background:var(--bg3);color:var(--green);border:1px solid var(--green);font-size:10px;font-family:var(--mono);padding:3px 10px;border-radius:3px;cursor:pointer;">&#9654; Open Excel tab</button>`;
       bubble.appendChild(xlBtn);
     }
+    // Persist only the assistant's text in chatHistory (provider-agnostic, fits MAX_CHAT_HISTORY trim).
     chatHistory.push({ role: 'assistant', content: fullText });
-    // Trim history to avoid exceeding provider context window
     if (chatHistory.length > MAX_CHAT_HISTORY) chatHistory = chatHistory.slice(-MAX_CHAT_HISTORY);
   } catch (e) {
     const safeMsg = (e.message || 'Unknown error').replace(/</g,'&lt;').replace(/>/g,'&gt;');

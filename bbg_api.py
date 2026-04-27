@@ -916,271 +916,268 @@ class ChatRequest(BaseModel):
 BBG_BASE_URL = os.environ.get("BBG_BASE_URL", "")
 OPENBB_BASE_URL = os.environ.get("OPENBB_BASE_URL", "")
 
-CHAT_SYSTEM = """You are an expert Bloomberg Terminal and OpenBB API assistant embedded in a web playground.
+CHAT_SYSTEM = """You are an expert Bloomberg Terminal and OpenBB API assistant embedded in a web playground. You help users get REAL data from a live Bloomberg Terminal via tool calls.
 
-## DECISION TREE — read this first before every response:
+## ABSOLUTE RULES — these override everything else and your prior training:
 
-STEP 1 — Is the user asking for operational/KPI company data?
-  Signals: deliveries, units sold/produced, subscribers, MAU/DAU, ARPU, same-store sales,
-  store count, GMV, load factor, RevPAR, ADR, occupancy rate, backlog, churn, renewal rate,
-  iPhone/Mac/iPad unit sales, vehicle deliveries, passenger miles, available seat miles.
+1. **NEVER fabricate or guess data values.** Do NOT include any specific number, date, price, EPS, market cap, subscriber count, vehicle delivery figure, store count, or any other factual quantity in your response unless it came from a tool call you made in THIS conversation. Saying "TSLA delivered ~466,000 vehicles in Q3" is FORBIDDEN unless a tool you just called returned that exact number. Users put your output into financial analysis pipelines — fabricated values are dangerous.
 
-  YES → Do NOT attempt BDP/BDH. Go directly to BQL. Say:
-        "This data is not available via the Bloomberg API. Use Bloomberg Excel BQL:"
-        Then give the exact =BQL() formula. Do not ask clarifying questions.
-        Known BQL fields for common cases:
-          vehicle deliveries / units delivered → NUMBER_OF_VEHICLES_SOLD
-          subscriber count / paid subscribers → RETAIL_SUBSCRIBERS or PAID_SUBSCRIBERS
-          streaming subscribers (NFLX, DIS) → STREAMING_SUBSCRIBERS
-          monthly active users / MAU → MONTHLY_ACTIVE_USERS
-          daily active users / DAU → DAILY_ACTIVE_USERS
-          ARPU → AVERAGE_REVENUE_PER_USER
-          iPhone units → UNIT_SALES_IPHONE
-          Mac units → UNIT_SALES_MAC
-          iPad units → UNIT_SALES_IPAD
-          same-store / comp sales → SAME_STORE_SALES_GROWTH
-          store count / locations → STORE_COUNT
-          GMV → ECOMMERCE_GMV
-          RevPAR → REVPAR
-          hotel occupancy → HOTEL_OCCUPANCY_RATE
-          ADR → ADR_HOTEL
-          load factor → PASSENGER_LOAD_FACTOR
-          backlog units → BACKLOG_UNITS
-          churn / renewal → CHURN_RATE / RENEWAL_RATE
-        IMPORTANT: The /bql endpoint requires a separate Bloomberg BQL API license.
-        If the user's Terminal does not have it, the endpoint will automatically fall back to BDP
-        with fiscal overrides (which may return null for true KPI fields).
-        Always tell the user: "The /bql endpoint will try the BQL service first; if not licensed,
-        it falls back to BDP. For guaranteed results, use the =BQL() Excel formula."
+2. **NEVER invent Bloomberg field mnemonics.** Bloomberg has tens of thousands of fields and most plausible-sounding names (NUMBER_OF_VEHICLES_SOLD, RETAIL_SUBSCRIBERS, UNIT_SALES_IPHONE, MONTHLY_ACTIVE_USERS, etc.) do NOT exist or return wrong data. Before mentioning ANY field that is not in the verified short list below, you MUST call `fields_search` to confirm it exists. If `fields_search` returns no real match, tell the user the field is not available — do not propose a guess.
 
-        Respond with BOTH:
-        A) The /bql API URL (same base as other Bloomberg endpoints):
-           {bbg_base}/bql?query=get(FIELD(FPT%3DQ%2CFPO%3D0Q%2CACT_EST_MAPPING%3DPRECISE%2CFS%3DMRC))%20for(%5B'TICKER%20US%20Equity'%5D)
-           Note: the query parameter must be URL-encoded. Encode ( as %28, ) as %29, = as %3D, , as %2C, spaces as %20, [ as %5B, ] as %5D, ' as %27
-        B) The equivalent =BQL() Excel formula (guaranteed to work with Bloomberg Excel Add-in)
+3. **Use tools — don't just describe them.** When the user asks for actual data ("what's AAPL trading at?", "TSLA's revenue last quarter", "SPX members"), call the appropriate tool (`bdp`, `bdh`, `bds`, `bql`, `security_lookup`) and return the real result. Don't just hand the user a URL and stop.
 
-        BQL query syntax for the API (unencoded form, then encode it):
-          get(FIELD(FPT=Q,FPO=0Q,ACT_EST_MAPPING=PRECISE,FS=MRC)) for(['TICKER US Equity'])
-        Multi-quarter history:
-          get(FIELD(FPT=Q,FPO=range(-3Q,0Q),ACT_EST_MAPPING=PRECISE,FS=MRC)) for(['TICKER US Equity'])
-        Multi-ticker:
-          get(FIELD(FPT=Q,FPO=0Q,ACT_EST_MAPPING=PRECISE,FS=MRC)) for(['TSLA US Equity','NIO US Equity'])
+4. **If a tool returns null, an empty result, or `[error: ...]`, report that honestly.** Do not substitute a value from your training data. Say: "Bloomberg returned no value for FIELD on SECURITY — this field may not be licensed on this Terminal, may not exist, or may not apply to this security. Try /fields/search to find an alternative."
 
-  NO → Continue to Step 2.
+5. **Always %20-encode spaces in URLs you write out.** "TSLA US Equity" → "TSLA%20US%20Equity".
 
-STEP 2 — Do I have all required parameters?
-  Check the endpoint's required params (listed below). If missing any → ASK. Do not generate URL.
-  Exception: if parameter has a sensible default (periodicity=DAILY, end_date=today, provider=yfinance), apply it silently.
+6. **For ambiguous tickers, call `security_lookup` first.** If the user says "Tesla" or "Apple", confirm the canonical ticker (TSLA US Equity, AAPL US Equity) before querying.
 
-STEP 3 — Generate the response:
-  1. Brief explanation (2-3 lines)
-  2. URL — fully formed, spaces in ticker names MUST be %20-encoded (e.g. TSLA%20US%20Equity)
-  3. curl example (use --data-urlencode so spaces are fine there)
-  4. Excel formula block labeled ```Excel
+## Tools you can call (call them — don't just describe them):
 
-## HARD RULES — never violate these:
-- NEVER invent Bloomberg field names. Only use fields listed below or fields the user explicitly provides. If uncertain, use /fields/search and say so.
-- ALWAYS %20-encode spaces in URL query parameter values. "TSLA US Equity" in a URL = "TSLA%20US%20Equity". Without encoding the URL breaks at the space.
-- NEVER ask unnecessary questions when you already have enough information to generate a correct URL.
+- `bdp(securities, fields, overrides?)` — current/reference values. Real-time prices, fundamentals, ratios.
+- `bdh(securities, fields, start_date, end_date?, periodicity?)` — historical time series. Dates: YYYY-MM-DD.
+- `bds(security, field, overrides?)` — bulk/array data (INDX_MEMBERS, DVD_HIST_ALL, BOARD_OF_DIRECTORS, EARN_ANN_DT_AND_EPS, OPT_EXPIRE_DT).
+- `bql(query)` — Bloomberg Query Language. Returns 503 if not licensed; tool result will say so.
+- `fields_search(query)` — search Bloomberg field catalog. **Use this before mentioning any non-standard field.**
+- `fields_info(fields)` — get metadata for known fields.
+- `security_lookup(query, yellow_key_filter?)` — find canonical ticker for a name. yellow_key_filter: Equity|Bond|Curncy|Index|Comdty|Govt.
+- `curve(curve_id)` — sovereign yield curve. curve_id: USD|EUR|GBP|JPY.
 
----
+## Verified Bloomberg fields you may use without searching first:
+PX_LAST, PX_BID, PX_ASK, PX_OPEN, PX_HIGH, PX_LOW, PX_VOLUME, PX_MID, CHG_PCT_1D,
+NAME, SECURITY_DES, MARKET_CAP, PE_RATIO, PX_TO_BOOK_RATIO, CURRENT_EV_TO_EBITDA,
+SALES_REV_TURN, EBITDA, NET_INCOME, IS_EPS_DILUTED, RETURN_ON_EQY, NET_MARGIN,
+FREE_CASH_FLOW, BS_TOT_ASSET, TOT_EQUITY, CF_CASH_FROM_OPER, CURR_ENTP_VAL,
+TOT_RETURN_INDEX_GROSS_DVDS, YLD_YTM_MID, DUR_MID
 
-Your job: help the user construct exact API calls for either:
-
-## Bloomberg Terminal API (base: {bbg_base})
-- GET /bdp?securities=<tickers>&fields=<fields>[&overrides=<key=value;...>]
-  BDP = current/reference data. e.g. ?securities=AAPL US Equity&fields=PX_LAST,PE_RATIO,MARKET_CAP
-- GET /bdh?securities=<tickers>&fields=<fields>&start_date=<YYYY-MM-DD>[&end_date=...&periodicity=DAILY|WEEKLY|MONTHLY|QUARTERLY|YEARLY]
-  BDH = historical time series
-- GET /bds?security=<ticker>&field=<bulk_field>
-  BDS = bulk data arrays. Common fields: INDX_MEMBERS, DVD_HIST_ALL, EARN_ANN_DT_AND_EPS, OPT_EXPIRE_DT, BOARD_OF_DIRECTORS
-- GET /intraday/bars?security=<ticker>&event_type=TRADE&interval=<mins>&start_datetime=<ISO>&end_datetime=<ISO>
-- GET /intraday/ticks?security=<ticker>&event_types=TRADE,BID,ASK&start_datetime=<ISO>&end_datetime=<ISO>
-- GET /fields/search?query=<keyword>
-- GET /fields/info?fields=<field1,field2>
-- GET /security/lookup?query=<name>[&yellow_key_filter=Equity|Bond|Curncy|Index|Comdty|Govt]
-- GET /curve?curve_id=USD|EUR|GBP|JPY
-- GET /bql?query=<url-encoded-bql-expression>
-  BQL = Bloomberg Query Language. For operational/KPI data not in BDP/BDH.
-  Example (decoded): get(NUMBER_OF_VEHICLES_SOLD(FPT=Q,FPO=0Q,ACT_EST_MAPPING=PRECISE,FS=MRC)) for(['TSLA US Equity'])
-  Example (URL):     /bql?query=get(NUMBER_OF_VEHICLES_SOLD(FPT%3DQ%2CFPO%3D0Q%2CACT_EST_MAPPING%3DPRECISE%2CFS%3DMRC))%20for(%5B'TSLA%20US%20Equity'%5D)
-
-## OpenBB API (base: {openbb_base})
-- GET /api/v1/equity/price/historical?symbol=AAPL&start_date=YYYY-MM-DD&provider=yfinance
-- GET /api/v1/equity/price/quote?symbol=AAPL&provider=yfinance
-- GET /api/v1/equity/profile?symbol=AAPL&provider=yfinance
-- GET /api/v1/equity/fundamental/income?symbol=AAPL&period=annual&provider=fmp
-- GET /api/v1/equity/fundamental/balance?symbol=AAPL&period=annual&provider=fmp
-- GET /api/v1/equity/fundamental/cash?symbol=AAPL&period=annual&provider=fmp
-- GET /api/v1/equity/fundamental/ratios?symbol=AAPL&period=annual&provider=fmp
-- GET /api/v1/equity/fundamental/metrics?symbol=AAPL&period=annual&provider=fmp
-- GET /api/v1/equity/estimates/price_target?symbol=AAPL&provider=fmp
-- GET /api/v1/equity/ownership/insider_trading?symbol=AAPL&provider=fmp
-- GET /api/v1/fixedincome/government/yield_curve?date=YYYY-MM-DD&provider=fred
-- GET /api/v1/fixedincome/rate/sofr?start_date=YYYY-MM-DD&provider=fred
-- GET /api/v1/currency/price/historical?symbol=EURUSD&start_date=YYYY-MM-DD&provider=fmp
-- GET /api/v1/economy/cpi?countries=united_states&frequency=monthly&provider=fred
-- GET /api/v1/economy/gdp/real?start_date=YYYY-MM-DD&provider=oecd
-- GET /api/v1/derivatives/options/chains?symbol=AAPL&provider=cboe
+For any other field — including ALL operational/KPI fields (deliveries, subscribers, units sold, store count, occupancy, etc.) — call `fields_search` FIRST.
 
 ## Bloomberg ticker format reference:
 - Equities: "AAPL US Equity", "TSLA US Equity", "7203 JP Equity"
 - Indices: "SPX Index", "CCMP Index", "INDU Index", "UKX Index", "NKY Index"
 - FX: "EURUSD Curncy", "USDJPY Curncy", "GBPUSD Curncy"
-- Fixed Income: "USGG10YR Index" (10Y yield), "US912828Z864 Govt" (specific bond)
+- Fixed Income: "USGG10YR Index" (10Y yield), "US912828Z864 Govt"
 - Commodities: "GC1 Comdty" (Gold), "CL1 Comdty" (WTI Oil), "CO1 Comdty" (Brent)
 - Rates: "SOFRRATE Index", "FEDL01 Index", "USGG3M Index"
 
-## Common Bloomberg fields:
-PX_LAST, PX_BID, PX_ASK, PX_OPEN, PX_HIGH, PX_LOW, PX_VOLUME, CHG_PCT_1D,
-NAME, SECURITY_DES, MARKET_CAP, PE_RATIO, BEST_EPS, SALES_REV_TURN, RETURN_ON_EQY,
-EBITDA, NET_MARGIN, CURR_ENTP_VAL, YLD_YTM_MID, DUR_MID, TOT_RETURN_INDEX_GROSS_DVDS,
-BEST_TARGET_PRICE, BEST_BUY_CNT, BEST_HOLD_CNT, BEST_SELL_CNT
+## OpenBB API endpoints (no tool wrapper — give the user the URL to run):
+- GET {openbb_base}/api/v1/equity/price/historical?symbol=AAPL&start_date=YYYY-MM-DD&provider=yfinance
+- GET {openbb_base}/api/v1/equity/price/quote?symbol=AAPL&provider=yfinance
+- GET {openbb_base}/api/v1/equity/profile?symbol=AAPL&provider=yfinance
+- GET {openbb_base}/api/v1/equity/fundamental/income?symbol=AAPL&period=annual&provider=fmp
+- GET {openbb_base}/api/v1/equity/fundamental/balance?symbol=AAPL&period=annual&provider=fmp
+- GET {openbb_base}/api/v1/equity/fundamental/cash?symbol=AAPL&period=annual&provider=fmp
+- GET {openbb_base}/api/v1/equity/fundamental/ratios?symbol=AAPL&period=annual&provider=fmp
+- GET {openbb_base}/api/v1/equity/estimates/price_target?symbol=AAPL&provider=fmp
+- GET {openbb_base}/api/v1/fixedincome/government/yield_curve?date=YYYY-MM-DD&provider=fred
+- GET {openbb_base}/api/v1/fixedincome/rate/sofr?start_date=YYYY-MM-DD&provider=fred
+- GET {openbb_base}/api/v1/currency/price/historical?symbol=EURUSD&start_date=YYYY-MM-DD&provider=fmp
+- GET {openbb_base}/api/v1/economy/cpi?countries=united_states&frequency=monthly&provider=fred
+- GET {openbb_base}/api/v1/economy/gdp/real?start_date=YYYY-MM-DD&provider=oecd
+- GET {openbb_base}/api/v1/derivatives/options/chains?symbol=AAPL&provider=cboe
 
-## CRITICAL RULES — follow these before generating any URL:
+## Excel formula equivalents (provide AFTER you have real tool results, so the user can re-run in their own spreadsheet):
+- BDP: =BDP("AAPL US Equity","PX_LAST")
+- BDH (array, Ctrl+Shift+Enter): =BDH("AAPL US Equity","PX_LAST","20250101","20260103","periodicitySelection=DAILY")
+- BDS (array): =BDS("SPX Index","INDX_MEMBERS")
+- BQL: =BQL("AAPL US Equity","FIELD_NAME","FPT=Q","FPO=0Q") — only after confirming the field via fields_search.
 
-1. NEVER generate a URL with missing required parameters. Required params per endpoint:
-   - /bdp  → securities (required), fields (required)
-   - /bdh  → securities (required), fields (required), start_date (required, format YYYY-MM-DD)
-   - /bds  → security (required), field (required, e.g. INDX_MEMBERS)
-   - /intraday/bars  → security (required), start_datetime (required, ISO format), interval (required, minutes)
-   - /intraday/ticks → security (required), start_datetime (required, ISO format)
-   - /api/v1/equity/price/historical → symbol (required), provider (required), start_date (required)
-   - /api/v1/fixedincome/rate/sofr → start_date (required), provider (required)
-   - /api/v1/currency/price/historical → symbol (required), provider (required), start_date (required)
+## Workflow for a typical user question:
 
-2. If the user has not provided all required parameters, ASK for them in the conversation BEFORE generating the URL. For example:
-   - User: "show me TSLA historical data" → Ask: "What date range would you like? (e.g. last 1 year, last 6 months, or a specific start date)"
-   - User: "BDS for Apple" → Ask: "Which bulk field do you need? e.g. DVD_HIST_ALL (dividends), INDX_MEMBERS (index members), EARN_ANN_DT_AND_EPS (earnings), BOARD_OF_DIRECTORS"
-   - User: "intraday for AAPL" → Ask: "What date and time range? And what interval in minutes?"
+STEP 1 — If the user gives a company name not a ticker → call `security_lookup` first.
+STEP 2 — Identify the right tool (bdp for current, bdh for historical, bds for bulk, bql for fiscal/KPI).
+STEP 3 — If the field isn't in the verified list above → call `fields_search` first.
+STEP 4 — Call the data tool. Report the EXACT value the tool returned (or honestly report null/error).
+STEP 5 — Provide the equivalent Excel formula so the user can re-run it themselves.
 
-3. Only generate the URL once you have ALL required parameters from the user. The URL you produce will be directly executed — it must work.
+Be concise. Today's date is """ + datetime.date.today().isoformat() + """.
 
-4. Use sensible defaults when clearly implied: periodicity=DAILY for BDH unless specified, provider=yfinance for OpenBB equity unless specified, end_date=today if not given.
+Bloomberg API base: {bbg_base}
+OpenBB API base: {openbb_base}
+"""
 
-## BQL — Bloomberg Query Language (Excel Add-in only, NOT available via API)
-BQL is a separate Bloomberg Excel function for operational/alternative data and complex fiscal queries.
-It is NOT accessible via the blpapi HTTP API. Always recommend BQL when the user asks for data that
-BDP/BDH cannot return.
-
-BQL syntax (legacy, most common):
-  =BQL("security", "FIELD_NAME", "OVERRIDE_KEY=VALUE", ...)
-
-BQL syntax (BQL 2.0, more powerful):
-  =BQL("univ('TSLA US Equity')", "number_of_vehicles_sold(per=q,fill=prev)")
-
-### BQL use cases and examples:
-
-**Operational / KPI data (NOT in BDP/BDH):**
-  =BQL("TSLA US Equity", "NUMBER_OF_VEHICLES_SOLD", "FPT=Q", "FPO=0Q", "ACT_EST_MAPPING=PRECISE", "FS=MRC", "CURRENCY=USD", "XLFILL=b")
-    → TSLA vehicle deliveries, most recent quarter
-
-  =BQL("TSLA US Equity", "NUMBER_OF_VEHICLES_SOLD", "FPT=Q", "FPO=-3Q", "FPO=0Q")
-    → Last 4 quarters of deliveries (use array, Ctrl+Shift+Enter)
-
-  =BQL("NFLX US Equity", "RETAIL_SUBSCRIBERS", "FPT=Q", "FPO=0Q")
-    → Netflix subscriber count
-
-  =BQL("AMZN US Equity", "ECOMMERCE_GMV", "FPT=Q", "FPO=0Q")
-    → Amazon GMV
-
-  =BQL("AAPL US Equity", "UNIT_SALES_IPHONE", "FPT=Q", "FPO=0Q")
-    → iPhone units sold
-
-**Financials with fiscal period control:**
-  =BQL("AAPL US Equity", "sales()", "per=q", "fill=prev", "frq=q")
-    → Quarterly revenue (BQL 2.0 style)
-
-  =BQL("MSFT US Equity", "net_income()", "per=q", "frq=q")
-    → Quarterly net income
-
-**Estimates vs actuals:**
-  =BQL("TSLA US Equity", "is_eps_diluted()", "per=q", "act_est_mapping=precise")
-    → EPS actuals with precise actuals/estimates mapping
-
-### BQL key override parameters:
-- FPT=Q|A|S — Fiscal period type: Quarterly / Annual / Semi-annual
-- FPO=0Q|-1Q|-2Q|-3Q — Fiscal period offset: current / 1 ago / 2 ago / 3 ago
-- FPO=0A|-1A — Annual offset
-- ACT_EST_MAPPING=PRECISE|INCLUSIVE — How to map actuals vs estimates
-- FS=MRC|MRQ — Fiscal statement: most recent cumulative / most recent quarter
-- CURRENCY=USD|GBP|EUR — Currency override
-- XLFILL=b|f — Excel fill: blank / forward-fill
-- per=q|a — Period (BQL 2.0)
-- frq=q|a|s — Frequency (BQL 2.0)
-- fill=prev|none — Fill missing values (BQL 2.0)
-
-### Common BQL-only fields (not in BDP/BDH):
-NUMBER_OF_VEHICLES_SOLD, RETAIL_SUBSCRIBERS, STREAMING_SUBSCRIBERS, PAID_SUBSCRIBERS,
-UNIT_SALES_IPHONE, UNIT_SALES_MAC, UNIT_SALES_IPAD, SAME_STORE_SALES_GROWTH,
-STORE_COUNT, ACTIVE_USERS, MONTHLY_ACTIVE_USERS, AVERAGE_REVENUE_PER_USER,
-ECOMMERCE_GMV, BACKLOG_UNITS, PROD_PRICE_AVG_US, RENEWAL_RATE, CHURN_RATE,
-PASSENGER_LOAD_FACTOR, REVENUE_PASSENGER_MILES, AVAILABLE_SEAT_MILES,
-HOTEL_OCCUPANCY_RATE, REVPAR, ADR_HOTEL
-
-## CRITICAL RULE: BQL vs BDP/BDH decision:
-- If the user asks for operational/KPI data (deliveries, subscribers, units, store count, occupancy, etc.) → use BQL, NOT BDP/BDH
-- If BDP returns [error] for a field → try BQL instead, it may be licensed differently
-- BQL is Excel-only — always note this clearly and provide the exact =BQL() formula
-
-## API vs Excel field availability:
-Some Bloomberg fields are NOT available via the blpapi (HTTP API) due to licensing restrictions, but DO work in the Bloomberg Excel Add-in if the user has the appropriate subscription:
-
-EXCEL-ONLY fields (return errors via API, work in Excel via BDP/BDH):
-- BEst consensus fields: BEST_EPS, BEST_SALES, BEST_EBITDA, BEST_TARGET_PRICE, BEST_BUY_CNT, BEST_HOLD_CNT, BEST_SELL_CNT, BEST_PE_RATIO, BEST_ROE, EARN_SURP_PCT_LAST_QTR (require Bloomberg Estimates license)
-- BVAL pricing: BVAL_PRICE_MIDPOINT, BVAL_PRICE_BID, BVAL_PRICE_ASK, BVAL_SCORE (require BVAL subscription)
-- Spread analytics: Z_SPRD_MID, OAS_SPREAD_MID (require Bloomberg fixed income analytics)
-- ESG: ESG_DISCLOSURE_SCORE, ENVIRONMENTAL_SCORE, SOCIAL_SCORE, GOVERNANCE_SCORE, CARBON_EMISSIONS_SCOPE1, CARBON_EMISSIONS_SCOPE2 (require Bloomberg ESG license)
-- Implied volatility: 30DAY_IMPVOL_100_PCT, 3MTH_IMPVOL_100_PCT (require options analytics subscription)
-- Intraday VWAP: VWAP (require intraday data license)
-
-EXCEL-ONLY via BQL (not accessible at all via API):
-- All operational/KPI fields listed in the BQL section above
-
-When the user asks for fields that are Excel-only, you MUST:
-1. Warn them: "⚠ This field is not available via the API — it requires a [license name] subscription."
-2. Still provide the Excel formula equivalent (BDP, BDH, or BQL as appropriate)
-3. Suggest an API-accessible alternative if one exists
-
-## Bloomberg Excel Formula equivalents:
-When generating Bloomberg API calls, ALWAYS include the equivalent Bloomberg Excel formula.
-
-- BDP (current/reference data):
-  Single field:  =BDP("AAPL US Equity","PX_LAST")
-  Multi-field:   =BDP("AAPL US Equity","PE_RATIO")  (one formula per field)
-  With override: =BDP("AAPL US Equity","PX_LAST","PRICING_SOURCE","BGN")
-
-- BDH (historical data) — array formula, press Ctrl+Shift+Enter:
-  =BDH("AAPL US Equity","PX_LAST","20250101","20260103","periodicitySelection=DAILY")
-  Multi-field:   =BDH("AAPL US Equity","PX_LAST,PX_VOLUME","20250101","20260103")
-
-- BDS (bulk/array data) — array formula:
-  =BDS("SPX Index","INDX_MEMBERS")
-  =BDS("AAPL US Equity","DVD_HIST_ALL")
-
-- Yield curve (one formula per tenor):
-  =BDP("USGG2YR Index","PX_LAST")   ' 2Y
-  =BDP("USGG10YR Index","PX_LAST")  ' 10Y
-
-- For OpenBB endpoints with no direct Bloomberg equivalent, note: "No direct Bloomberg Excel formula — use Bloomberg Terminal: <suggested function key> <GO>"
-
-Excel formula tips:
-- BDH and BDS are array formulas — select a range first, then Ctrl+Shift+Enter
-- Dates in BDH: "YYYYMMDD" format or cell reference
-- For live auto-refresh: Tools > Real-Time Data > Configure
-
-When you have all parameters, respond with:
-1. A brief explanation
-2. The exact complete URL
-3. A curl example
-4. The equivalent Bloomberg Excel formula(s) — formatted in a code block labeled "Excel"
-
-Be concise. Today's date is """ + datetime.date.today().isoformat() + "."
 
 CHAT_SYSTEM = (CHAT_SYSTEM
     .replace("{bbg_base}", BBG_BASE_URL)
     .replace("{openbb_base}", OPENBB_BASE_URL)
 )
+
+
+# ── Chat tools (real Bloomberg execution, no fabrication) ────────────────────
+# Canonical tool catalogue. Each entry is converted to the per-provider schema
+# in the streaming helpers below.
+CHAT_TOOL_DEFS = [
+    {
+        "name": "bdp",
+        "description": "Bloomberg Data Point - current/reference values for one or more securities and fields. Use for live quotes, names, fundamentals, ratios.",
+        "params": {
+            "securities": {"type": "string", "description": "Comma-separated tickers like 'AAPL US Equity,MSFT US Equity'"},
+            "fields":     {"type": "string", "description": "Comma-separated field mnemonics like 'PX_LAST,MARKET_CAP'"},
+            "overrides":  {"type": "string", "description": "Optional. Semicolon-separated key=value overrides, e.g. 'PRICING_SOURCE=BGN'"},
+        },
+        "required": ["securities", "fields"],
+    },
+    {
+        "name": "bdh",
+        "description": "Bloomberg Data History - historical time series for one or more securities. start_date/end_date in YYYY-MM-DD.",
+        "params": {
+            "securities":  {"type": "string", "description": "Comma-separated tickers"},
+            "fields":      {"type": "string", "description": "Comma-separated field mnemonics, default PX_LAST"},
+            "start_date":  {"type": "string", "description": "YYYY-MM-DD"},
+            "end_date":    {"type": "string", "description": "YYYY-MM-DD (default: today)"},
+            "periodicity": {"type": "string", "description": "DAILY, WEEKLY, MONTHLY, QUARTERLY, SEMI_ANNUALLY, YEARLY (default DAILY)"},
+            "currency":    {"type": "string", "description": "Optional currency override e.g. USD"},
+        },
+        "required": ["securities", "fields", "start_date"],
+    },
+    {
+        "name": "bds",
+        "description": "Bloomberg Data Set - bulk/array data for a single security. Examples: INDX_MEMBERS, DVD_HIST_ALL, BOARD_OF_DIRECTORS, EARN_ANN_DT_AND_EPS, OPT_EXPIRE_DT.",
+        "params": {
+            "security":  {"type": "string", "description": "Single ticker, e.g. 'SPX Index'"},
+            "field":     {"type": "string", "description": "Bulk field mnemonic"},
+            "overrides": {"type": "string", "description": "Optional semicolon-separated overrides"},
+        },
+        "required": ["security", "field"],
+    },
+    {
+        "name": "bql",
+        "description": "Bloomberg Query Language - operational/KPI/fiscal data not available via BDP. Returns 503 with structured fallback if not licensed on this Terminal.",
+        "params": {
+            "query": {"type": "string", "description": "BQL expression, e.g. get(NUMBER_OF_VEHICLES_SOLD(FPT=Q,FPO=0Q)) for(['TSLA US Equity'])"},
+        },
+        "required": ["query"],
+    },
+    {
+        "name": "fields_search",
+        "description": "Search the Bloomberg field catalog. Call this BEFORE proposing any non-standard field name to confirm it actually exists.",
+        "params": {
+            "query": {"type": "string", "description": "Search term, e.g. 'subscribers' or 'iphone units'"},
+        },
+        "required": ["query"],
+    },
+    {
+        "name": "fields_info",
+        "description": "Get description and metadata for one or more known Bloomberg fields.",
+        "params": {
+            "fields": {"type": "string", "description": "Comma-separated field mnemonics"},
+        },
+        "required": ["fields"],
+    },
+    {
+        "name": "security_lookup",
+        "description": "Look up the canonical Bloomberg ticker for a company name or partial ticker. Use this when the user gives a name without a yellow key.",
+        "params": {
+            "query":             {"type": "string", "description": "Company name or partial ticker, e.g. 'Tesla'"},
+            "yellow_key_filter": {"type": "string", "description": "Optional: Equity, Bond, Curncy, Index, Comdty, Govt"},
+        },
+        "required": ["query"],
+    },
+    {
+        "name": "curve",
+        "description": "Sovereign yield curve snapshot for USD, EUR, GBP, or JPY.",
+        "params": {
+            "curve_id": {"type": "string", "description": "USD, EUR, GBP, or JPY"},
+            "date":     {"type": "string", "description": "Optional YYYYMMDD; default today"},
+        },
+        "required": ["curve_id"],
+    },
+]
+
+def _tool_paths():
+    return {
+        "bdp": "/bdp", "bdh": "/bdh", "bds": "/bds", "bql": "/bql",
+        "fields_search": "/fields/search", "fields_info": "/fields/info",
+        "security_lookup": "/security/lookup", "curve": "/curve",
+    }
+
+def _tools_anthropic():
+    out = []
+    for t in CHAT_TOOL_DEFS:
+        out.append({
+            "name": t["name"],
+            "description": t["description"],
+            "input_schema": {
+                "type": "object",
+                "properties": t["params"],
+                "required": t["required"],
+            },
+        })
+    return out
+
+def _tools_openai():
+    out = []
+    for t in CHAT_TOOL_DEFS:
+        out.append({
+            "type": "function",
+            "function": {
+                "name": t["name"],
+                "description": t["description"],
+                "parameters": {
+                    "type": "object",
+                    "properties": t["params"],
+                    "required": t["required"],
+                },
+            },
+        })
+    return out
+
+def _tools_google():
+    decls = []
+    for t in CHAT_TOOL_DEFS:
+        decls.append({
+            "name": t["name"],
+            "description": t["description"],
+            "parameters": {
+                "type": "object",
+                "properties": t["params"],
+                "required": t["required"],
+            },
+        })
+    return [{"functionDeclarations": decls}]
+
+CHAT_TOOLS_ANTHROPIC = _tools_anthropic()
+CHAT_TOOLS_OPENAI    = _tools_openai()
+CHAT_TOOLS_GOOGLE    = _tools_google()
+
+_TOOL_RESULT_MAX_CHARS = 8000  # cap per tool result returned to the model
+_MAX_TOOL_TURNS = 6            # safety cap on multi-turn tool loops
+
+async def _exec_tool(name: str, input_data: dict) -> str:
+    """Execute a chat tool by calling our own loopback API. Returns a JSON string.
+
+    All real Bloomberg data flows through this; the model is forbidden from
+    inventing values, so every quoted number must originate from a tool result.
+    """
+    import httpx
+    paths = _tool_paths()
+    path = paths.get(name)
+    if not path:
+        return json.dumps({"_error": f"unknown tool: {name}"})
+    params = {k: v for k, v in (input_data or {}).items() if v not in (None, "")}
+    base_port = os.environ.get("API_PORT", "8195")
+    base = f"http://127.0.0.1:{base_port}"
+    try:
+        async with httpx.AsyncClient(timeout=45) as client:
+            r = await client.get(f"{base}{path}", params=params)
+        try:
+            payload = r.json()
+        except Exception:
+            payload = {"_status": r.status_code, "_raw": r.text[:500]}
+        if r.status_code >= 400:
+            wrap = {"_status": r.status_code}
+            if isinstance(payload, dict):
+                wrap.update(payload)
+            else:
+                wrap["detail"] = payload
+            payload = wrap
+        out = json.dumps(payload, default=str)
+        if len(out) > _TOOL_RESULT_MAX_CHARS:
+            out = out[:_TOOL_RESULT_MAX_CHARS] + ' ...[truncated]'
+        return out
+    except Exception as e:
+        return json.dumps({"_error": _safe_error(e)})
+
 
 @app.post("/chat", tags=["AI Assistant"])
 async def chat(request: Request, req: ChatRequest):
@@ -1215,135 +1212,305 @@ async def chat(request: Request, req: ChatRequest):
                              headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"})
 
 
-async def _stream_anthropic(api_key: str, model: str, messages: list):
-    """Stream from Anthropic Messages API."""
-    import httpx
+async def _stream_anthropic(api_key, model, messages):
+    """Multi-turn tool-use loop against Anthropic Messages API.
+
+    Streams text deltas to the client AND emits tool_use / tool_result SSE
+    events so the UI can show what was actually called and what was returned.
+    The model is FORBIDDEN by the system prompt from quoting values that did
+    not come from a tool result in this conversation.
+    """
+    import httpx, json as _json
     base_url = os.environ.get("ANTHROPIC_BASE_URL", "https://api.anthropic.com")
     headers = {
         "anthropic-version": "2023-06-01",
         "content-type": "application/json",
         "x-api-key": api_key,
     }
-    body = {
-        "model": model,
-        "max_tokens": 1024,
-        "system": CHAT_SYSTEM,
-        "messages": messages,
-        "stream": True,
-    }
-    async with httpx.AsyncClient(timeout=60) as client:
-        async with client.stream("POST", f"{base_url}/v1/messages",
-                                 headers=headers, json=body) as resp:
-            if resp.status_code != 200:
-                body_bytes = await resp.aread()
-                err = body_bytes.decode(errors="replace")[:500]
-                yield f"data: {json.dumps({'text': f'[Anthropic API error {resp.status_code}]: {err}'})}\n\n"
-                yield "data: [DONE]\n\n"
-                return
-            async for line in resp.aiter_lines():
-                if not line.startswith("data:"):
-                    continue
-                data = line[5:].strip()
-                if data == "[DONE]":
-                    break
+
+    # Convert the inbound messages (string content) to Anthropic's content-block
+    # format so we can append tool_use / tool_result blocks across turns.
+    conv = [{"role": m["role"], "content": m["content"]} for m in messages]
+
+    for turn in range(_MAX_TOOL_TURNS):
+        body = {
+            "model": model,
+            "max_tokens": 2048,
+            "system": CHAT_SYSTEM,
+            "tools": CHAT_TOOLS_ANTHROPIC,
+            "messages": conv,
+            "stream": True,
+        }
+        blocks = {}      # index -> {"type": "text"|"tool_use", ...}
+        stop_reason = None
+
+        async with httpx.AsyncClient(timeout=120) as client:
+            async with client.stream("POST", f"{base_url}/v1/messages",
+                                     headers=headers, json=body) as resp:
+                if resp.status_code != 200:
+                    body_bytes = await resp.aread()
+                    err = body_bytes.decode(errors="replace")[:500]
+                    yield f"data: {_json.dumps({'type':'text','text': f'[Anthropic API error {resp.status_code}]: {err}'})}\n\n"
+                    yield "data: [DONE]\n\n"
+                    return
+
+                async for line in resp.aiter_lines():
+                    if not line.startswith("data:"):
+                        continue
+                    data_str = line[5:].strip()
+                    if not data_str:
+                        continue
+                    try:
+                        ev = _json.loads(data_str)
+                    except Exception:
+                        continue
+                    et = ev.get("type")
+                    if et == "content_block_start":
+                        idx = ev.get("index")
+                        cb = ev.get("content_block", {})
+                        if cb.get("type") == "text":
+                            blocks[idx] = {"type": "text", "text": ""}
+                        elif cb.get("type") == "tool_use":
+                            blocks[idx] = {
+                                "type": "tool_use",
+                                "id":    cb.get("id"),
+                                "name":  cb.get("name"),
+                                "input_json": "",
+                            }
+                    elif et == "content_block_delta":
+                        idx = ev.get("index")
+                        delta = ev.get("delta", {})
+                        if delta.get("type") == "text_delta":
+                            text = delta.get("text", "")
+                            if text and idx in blocks and blocks[idx]["type"] == "text":
+                                blocks[idx]["text"] += text
+                                yield f"data: {_json.dumps({'type':'text','text': text})}\n\n"
+                        elif delta.get("type") == "input_json_delta":
+                            if idx in blocks and blocks[idx]["type"] == "tool_use":
+                                blocks[idx]["input_json"] += delta.get("partial_json", "")
+                    elif et == "message_delta":
+                        sr = ev.get("delta", {}).get("stop_reason")
+                        if sr:
+                            stop_reason = sr
+
+        # End of one streamed turn — handle tool calls if any
+        tool_blocks = [(idx, b) for idx, b in sorted(blocks.items())
+                       if b.get("type") == "tool_use"]
+        if not tool_blocks or stop_reason != "tool_use":
+            yield "data: [DONE]\n\n"
+            return
+
+        # Append the assistant message in content-block form
+        assistant_content = []
+        for idx in sorted(blocks.keys()):
+            b = blocks[idx]
+            if b["type"] == "text" and b["text"]:
+                assistant_content.append({"type": "text", "text": b["text"]})
+            elif b["type"] == "tool_use":
                 try:
-                    ev = json.loads(data)
-                    if ev.get("type") == "content_block_delta":
-                        text = ev["delta"].get("text", "")
-                        if text:
-                            yield f"data: {json.dumps({'text': text})}\n\n"
+                    tool_input = _json.loads(b["input_json"]) if b["input_json"] else {}
                 except Exception:
-                    pass
+                    tool_input = {}
+                b["_parsed_input"] = tool_input
+                assistant_content.append({
+                    "type":  "tool_use",
+                    "id":    b["id"],
+                    "name":  b["name"],
+                    "input": tool_input,
+                })
+        conv.append({"role": "assistant", "content": assistant_content})
+
+        # Execute every tool, stream events, then append a single user turn
+        # containing all tool_result blocks.
+        tool_results = []
+        for _idx, b in tool_blocks:
+            yield f"data: {_json.dumps({'type':'tool_use','id':b['id'],'name':b['name'],'input':b.get('_parsed_input', {})})}\n\n"
+            out_str = await _exec_tool(b["name"], b.get("_parsed_input", {}))
+            yield f"data: {_json.dumps({'type':'tool_result','id':b['id'],'name':b['name'],'output':out_str[:2000]})}\n\n"
+            tool_results.append({
+                "type": "tool_result",
+                "tool_use_id": b["id"],
+                "content": out_str,
+            })
+        conv.append({"role": "user", "content": tool_results})
+
+    # Hit the turn cap — let the client know
+    yield f"data: {_json.dumps({'type':'text','text': '[Tool-use turn limit reached; final answer truncated.]'})}\n\n"
     yield "data: [DONE]\n\n"
 
 
-async def _stream_openai(api_key: str, model: str, messages: list):
-    """Stream from OpenAI-compatible Chat Completions API.
-    Works with OpenAI, Azure OpenAI, Groq, Together, Mistral, etc."""
-    import httpx
+async def _stream_openai(api_key, model, messages):
+    """Tool-use loop against OpenAI-compatible chat.completions.
+
+    Uses non-streaming requests so we can cleanly assemble tool_calls between
+    turns; final assistant text is delivered in chunks so the UI still feels
+    incremental (most providers only batch a few KB of text per turn).
+    """
+    import httpx, json as _json
     base_url = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com")
     headers = {
         "content-type": "application/json",
         "authorization": f"Bearer {api_key}",
     }
-    body = {
-        "model": model,
-        "max_tokens": 1024,
-        "messages": [{"role": "system", "content": CHAT_SYSTEM}] + messages,
-        "stream": True,
-    }
-    async with httpx.AsyncClient(timeout=60) as client:
-        async with client.stream("POST", f"{base_url}/v1/chat/completions",
-                                 headers=headers, json=body) as resp:
-            if resp.status_code != 200:
-                body_bytes = await resp.aread()
-                err = body_bytes.decode(errors="replace")[:500]
-                yield f"data: {json.dumps({'text': f'[OpenAI API error {resp.status_code}]: {err}'})}\n\n"
-                yield "data: [DONE]\n\n"
-                return
-            async for line in resp.aiter_lines():
-                if not line.startswith("data:"):
-                    continue
-                data = line[5:].strip()
-                if data == "[DONE]":
-                    break
-                try:
-                    ev = json.loads(data)
-                    delta = ev.get("choices", [{}])[0].get("delta", {})
-                    text = delta.get("content", "")
-                    if text:
-                        yield f"data: {json.dumps({'text': text})}\n\n"
-                except Exception:
-                    pass
+    conv = [{"role": "system", "content": CHAT_SYSTEM}]
+    for m in messages:
+        conv.append({"role": m["role"], "content": m["content"]})
+
+    for turn in range(_MAX_TOOL_TURNS):
+        body = {
+            "model": model,
+            "max_tokens": 2048,
+            "messages": conv,
+            "tools": CHAT_TOOLS_OPENAI,
+            "tool_choice": "auto",
+        }
+        async with httpx.AsyncClient(timeout=120) as client:
+            r = await client.post(f"{base_url}/v1/chat/completions",
+                                  headers=headers, json=body)
+        if r.status_code != 200:
+            err = r.text[:500]
+            yield f"data: {_json.dumps({'type':'text','text': f'[OpenAI API error {r.status_code}]: {err}'})}\n\n"
+            yield "data: [DONE]\n\n"
+            return
+        try:
+            data = r.json()
+        except Exception:
+            yield f"data: {_json.dumps({'type':'text','text': '[OpenAI: non-JSON response]'})}\n\n"
+            yield "data: [DONE]\n\n"
+            return
+
+        choice = (data.get("choices") or [{}])[0]
+        msg    = choice.get("message", {}) or {}
+        content    = msg.get("content") or ""
+        tool_calls = msg.get("tool_calls") or []
+        finish     = choice.get("finish_reason")
+
+        # Stream any text content in modest chunks
+        if content:
+            CHUNK = 80
+            for k in range(0, len(content), CHUNK):
+                yield f"data: {_json.dumps({'type':'text','text': content[k:k+CHUNK]})}\n\n"
+
+        if not tool_calls or finish not in ("tool_calls", "function_call", None):
+            yield "data: [DONE]\n\n"
+            return
+
+        # Persist the assistant turn including tool_calls
+        conv.append({
+            "role":      "assistant",
+            "content":   content,
+            "tool_calls": tool_calls,
+        })
+
+        # Execute every tool and append one tool message per call
+        for tc in tool_calls:
+            fn   = tc.get("function", {}) or {}
+            name = fn.get("name", "")
+            try:
+                args = _json.loads(fn.get("arguments") or "{}")
+            except Exception:
+                args = {}
+            yield f"data: {_json.dumps({'type':'tool_use','id':tc.get('id'),'name':name,'input':args})}\n\n"
+            out_str = await _exec_tool(name, args)
+            yield f"data: {_json.dumps({'type':'tool_result','id':tc.get('id'),'name':name,'output':out_str[:2000]})}\n\n"
+            conv.append({
+                "role":         "tool",
+                "tool_call_id": tc.get("id"),
+                "name":         name,
+                "content":      out_str,
+            })
+
+    yield f"data: {_json.dumps({'type':'text','text': '[Tool-use turn limit reached; final answer truncated.]'})}\n\n"
     yield "data: [DONE]\n\n"
 
 
-async def _stream_google(api_key: str, model: str, messages: list):
-    """Stream from Google Gemini generateContent API."""
-    import httpx
+async def _stream_google(api_key, model, messages):
+    """Tool-use loop against Google Gemini generateContent.
+
+    Non-streaming per turn so we can cleanly assemble functionCall / functionResponse
+    parts; final text is chunked back to the client.
+    """
+    import httpx, json as _json
     base_url = os.environ.get("GOOGLE_BASE_URL", "https://generativelanguage.googleapis.com")
 
-    # Convert chat messages to Gemini format
     contents = []
     for m in messages:
         role = "user" if m["role"] == "user" else "model"
         contents.append({"role": role, "parts": [{"text": m["content"]}]})
 
-    body = {
-        "contents": contents,
-        "systemInstruction": {"parts": [{"text": CHAT_SYSTEM}]},
-        "generationConfig": {"maxOutputTokens": 1024},
-    }
-    url = f"{base_url}/v1beta/models/{model}:streamGenerateContent?alt=sse"
     headers = {
         "content-type": "application/json",
         "x-goog-api-key": api_key,
     }
-    async with httpx.AsyncClient(timeout=60) as client:
-        async with client.stream("POST", url,
-                                 headers=headers,
-                                 json=body) as resp:
-            if resp.status_code != 200:
-                body_bytes = await resp.aread()
-                err = body_bytes.decode(errors="replace")[:500]
-                yield f"data: {json.dumps({'text': f'[Google API error {resp.status_code}]: {err}'})}\n\n"
-                yield "data: [DONE]\n\n"
-                return
-            async for line in resp.aiter_lines():
-                if not line.startswith("data:"):
-                    continue
-                data = line[5:].strip()
-                if data == "[DONE]":
-                    break
-                try:
-                    ev = json.loads(data)
-                    parts = ev.get("candidates", [{}])[0].get("content", {}).get("parts", [])
-                    for part in parts:
-                        text = part.get("text", "")
-                        if text:
-                            yield f"data: {json.dumps({'text': text})}\n\n"
-                except Exception:
-                    pass
+
+    for turn in range(_MAX_TOOL_TURNS):
+        body = {
+            "contents": contents,
+            "systemInstruction": {"parts": [{"text": CHAT_SYSTEM}]},
+            "tools": CHAT_TOOLS_GOOGLE,
+            "generationConfig": {"maxOutputTokens": 2048},
+        }
+        url = f"{base_url}/v1beta/models/{model}:generateContent"
+        async with httpx.AsyncClient(timeout=120) as client:
+            r = await client.post(url, headers=headers, json=body)
+        if r.status_code != 200:
+            err = r.text[:500]
+            yield f"data: {_json.dumps({'type':'text','text': f'[Google API error {r.status_code}]: {err}'})}\n\n"
+            yield "data: [DONE]\n\n"
+            return
+        try:
+            data = r.json()
+        except Exception:
+            yield f"data: {_json.dumps({'type':'text','text': '[Google: non-JSON response]'})}\n\n"
+            yield "data: [DONE]\n\n"
+            return
+
+        cand  = (data.get("candidates") or [{}])[0]
+        parts = ((cand.get("content") or {}).get("parts")) or []
+
+        text_parts = []
+        function_calls = []
+        for p in parts:
+            if "text" in p and p["text"]:
+                text_parts.append(p["text"])
+            elif "functionCall" in p:
+                function_calls.append(p["functionCall"])
+
+        # Stream any text
+        joined = "".join(text_parts)
+        if joined:
+            CHUNK = 80
+            for k in range(0, len(joined), CHUNK):
+                yield f"data: {_json.dumps({'type':'text','text': joined[k:k+CHUNK]})}\n\n"
+
+        if not function_calls:
+            yield "data: [DONE]\n\n"
+            return
+
+        # Append model turn (with the function calls) to the conversation
+        contents.append({"role": "model", "parts": parts})
+
+        # Execute each call and append a single user turn with all function responses
+        response_parts = []
+        for fc in function_calls:
+            name = fc.get("name", "")
+            args = fc.get("args", {}) or {}
+            yield f"data: {_json.dumps({'type':'tool_use','id':name,'name':name,'input':args})}\n\n"
+            out_str = await _exec_tool(name, args)
+            yield f"data: {_json.dumps({'type':'tool_result','id':name,'name':name,'output':out_str[:2000]})}\n\n"
+            try:
+                out_payload = _json.loads(out_str)
+            except Exception:
+                out_payload = {"raw": out_str}
+            response_parts.append({
+                "functionResponse": {
+                    "name": name,
+                    "response": {"content": out_payload},
+                }
+            })
+        contents.append({"role": "user", "parts": response_parts})
+
+    yield f"data: {_json.dumps({'type':'text','text': '[Tool-use turn limit reached; final answer truncated.]'})}\n\n"
     yield "data: [DONE]\n\n"
 
 
