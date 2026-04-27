@@ -1380,54 +1380,77 @@ async def _stream_anthropic(api_key, model, messages):
         blocks = {}      # index -> {"type": "text"|"tool_use", ...}
         stop_reason = None
 
-        async with httpx.AsyncClient(timeout=120) as client:
-            async with client.stream("POST", f"{base_url}/v1/messages",
-                                     headers=headers, json=body) as resp:
-                if resp.status_code != 200:
-                    body_bytes = await resp.aread()
-                    err = body_bytes.decode(errors="replace")[:500]
-                    yield f"data: {_json.dumps({'type':'text','text': f'[Anthropic API error {resp.status_code}]: {err}'})}\n\n"
-                    yield "data: [DONE]\n\n"
-                    return
+        # Retry transient connect failures (corporate proxy occasionally drops
+        # SSL handshakes). Surface a real error message on permanent failure
+        # so the UI doesn't render an empty assistant bubble.
+        import asyncio as _asyncio
+        upstream_error = None
+        for attempt in range(3):
+            try:
+                async with httpx.AsyncClient(timeout=120) as client:
+                    async with client.stream("POST", f"{base_url}/v1/messages",
+                                             headers=headers, json=body) as resp:
+                        if resp.status_code != 200:
+                            body_bytes = await resp.aread()
+                            err = body_bytes.decode(errors="replace")[:500]
+                            yield f"data: {_json.dumps({'type':'text','text': f'[Anthropic API error {resp.status_code}]: {err}'})}\n\n"
+                            yield "data: [DONE]\n\n"
+                            return
 
-                async for line in resp.aiter_lines():
-                    if not line.startswith("data:"):
-                        continue
-                    data_str = line[5:].strip()
-                    if not data_str:
-                        continue
-                    try:
-                        ev = _json.loads(data_str)
-                    except Exception:
-                        continue
-                    et = ev.get("type")
-                    if et == "content_block_start":
-                        idx = ev.get("index")
-                        cb = ev.get("content_block", {})
-                        if cb.get("type") == "text":
-                            blocks[idx] = {"type": "text", "text": ""}
-                        elif cb.get("type") == "tool_use":
-                            blocks[idx] = {
-                                "type": "tool_use",
-                                "id":    cb.get("id"),
-                                "name":  cb.get("name"),
-                                "input_json": "",
-                            }
-                    elif et == "content_block_delta":
-                        idx = ev.get("index")
-                        delta = ev.get("delta", {})
-                        if delta.get("type") == "text_delta":
-                            text = delta.get("text", "")
-                            if text and idx in blocks and blocks[idx]["type"] == "text":
-                                blocks[idx]["text"] += text
-                                yield f"data: {_json.dumps({'type':'text','text': text})}\n\n"
-                        elif delta.get("type") == "input_json_delta":
-                            if idx in blocks and blocks[idx]["type"] == "tool_use":
-                                blocks[idx]["input_json"] += delta.get("partial_json", "")
-                    elif et == "message_delta":
-                        sr = ev.get("delta", {}).get("stop_reason")
-                        if sr:
-                            stop_reason = sr
+                        async for line in resp.aiter_lines():
+                            if not line.startswith("data:"):
+                                continue
+                            data_str = line[5:].strip()
+                            if not data_str:
+                                continue
+                            try:
+                                ev = _json.loads(data_str)
+                            except Exception:
+                                continue
+                            et = ev.get("type")
+                            if et == "content_block_start":
+                                idx = ev.get("index")
+                                cb = ev.get("content_block", {})
+                                if cb.get("type") == "text":
+                                    blocks[idx] = {"type": "text", "text": ""}
+                                elif cb.get("type") == "tool_use":
+                                    blocks[idx] = {
+                                        "type": "tool_use",
+                                        "id":    cb.get("id"),
+                                        "name":  cb.get("name"),
+                                        "input_json": "",
+                                    }
+                            elif et == "content_block_delta":
+                                idx = ev.get("index")
+                                delta = ev.get("delta", {})
+                                if delta.get("type") == "text_delta":
+                                    text = delta.get("text", "")
+                                    if text and idx in blocks and blocks[idx]["type"] == "text":
+                                        blocks[idx]["text"] += text
+                                        yield f"data: {_json.dumps({'type':'text','text': text})}\n\n"
+                                elif delta.get("type") == "input_json_delta":
+                                    if idx in blocks and blocks[idx]["type"] == "tool_use":
+                                        blocks[idx]["input_json"] += delta.get("partial_json", "")
+                            elif et == "message_delta":
+                                sr = ev.get("delta", {}).get("stop_reason")
+                                if sr:
+                                    stop_reason = sr
+                upstream_error = None
+                break
+            except (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout) as exc:
+                upstream_error = exc
+                if attempt < 2:
+                    await _asyncio.sleep(0.5 * (attempt + 1))
+                    continue
+
+        if upstream_error is not None:
+            msg = (f"[Cannot reach Anthropic API after 3 attempts: "
+                   f"{type(upstream_error).__name__}. The corporate forward "
+                   f"proxy may be down or rate-limited. Local server is up; "
+                   f"upstream is unreachable. Try again in a moment.]")
+            yield f"data: {_json.dumps({'type':'text','text': msg})}\n\n"
+            yield "data: [DONE]\n\n"
+            return
 
         # End of one streamed turn — handle tool calls if any
         tool_blocks = [(idx, b) for idx, b in sorted(blocks.items())
