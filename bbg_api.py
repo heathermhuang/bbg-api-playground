@@ -639,6 +639,36 @@ def _parse_bql(query: str):
     return field, overrides, securities
 
 
+def _field_is_valid(request: "Request", security: str, field: str) -> bool | None:
+    """Probe via the existing /bdp path to confirm a field mnemonic exists.
+
+    Bloomberg returns the literal string "[error: Field not valid]" inside the
+    BDP response when a mnemonic is unknown, which is the only reliable signal
+    we have when //blp/apiflds (fields_search/info) is not licensed.
+
+    Returns True (real field), False (Bloomberg rejected the mnemonic), or
+    None (could not determine — caller must NOT treat as validation either way).
+    """
+    try:
+        probe = bdp(
+            request=request,
+            securities=security,
+            fields=field,
+            overrides=None,
+        )
+        rows = probe.get("results", []) if isinstance(probe, dict) else []
+        if not rows:
+            return None
+        val = rows[0].get(field)
+        if isinstance(val, str) and "Field not valid" in val:
+            return False
+        # Any other return — number, null, applicable-but-empty — means the
+        # mnemonic exists in the Bloomberg field catalog.
+        return True
+    except Exception:
+        return None
+
+
 def _bql_overrides_to_bdp(overrides: dict) -> str:
     """
     Convert BQL fiscal overrides to BDP override string.
@@ -753,8 +783,38 @@ def bql_query(
             result["bql_query"] = query
             return result
         except Exception:
-            # BDP fallback also failed — field is likely BQL-only.
-            # Return a structured response instead of an error.
+            # BDP fallback also failed — field is either BQL-only or fabricated.
+            # Validate the mnemonic before handing the user a formula.
+            field_valid = _field_is_valid(request, securities[0], field)
+
+            if field_valid is False:
+                # Bloomberg explicitly rejected this mnemonic — refuse to emit
+                # an =BQL() formula that we know will fail in Excel.
+                return {
+                    "source": "bql_unavailable",
+                    "query": query,
+                    "field": field,
+                    "securities": securities,
+                    "results": [],
+                    "field_invalid": True,
+                    "note": (
+                        f"Bloomberg rejected the field mnemonic '{field}' as not valid for "
+                        f"{securities[0]}. The field appears to be fabricated or misspelled. "
+                        f"Look up the real field on the Terminal: type FLDS<GO> and search "
+                        f"for the concept (e.g. 'vehicle deliveries'), then re-query with "
+                        f"the verified mnemonic."
+                    ),
+                    "excel_formula": None,
+                    "alternatives": [
+                        f"On the Terminal, type FLDS<GO> and search for the concept this "
+                        f"field was meant to represent, then re-query with the real mnemonic.",
+                        f"For Tesla deliveries specifically, NUMBER_OF_VEHICLES_SOLD is the "
+                        f"verified Bloomberg field (returns total units; use FUND_PER override "
+                        f"to scope to a specific quarter).",
+                    ],
+                }
+
+            # Field exists (or status unknown) — emit formula with a candor flag.
             excel_formula = (
                 f'=BQL("{securities[0]}","{field}"'
                 + "".join(f',"{k}={v}"' for k, v in overrides.items())
@@ -766,9 +826,15 @@ def bql_query(
                 "field": field,
                 "securities": securities,
                 "results": [],
+                "field_verified": bool(field_valid),
                 "note": (
-                    f"//blp/bql service is not licensed and the field '{field}' "
-                    f"is not available via BDP. This is a BQL-only field."
+                    f"//blp/bql service is not licensed on this Terminal. "
+                    f"Field '{field}' "
+                    + ("was verified via BDP probe and exists in the Bloomberg field catalog. "
+                       if field_valid
+                       else "could not be verified (BDP probe inconclusive). "
+                            "VERIFY ON TERMINAL via FLDS<GO> before using this formula. ")
+                    + f"This field may require BQL or the Excel Add-in to retrieve historical values."
                 ),
                 "excel_formula": excel_formula,
                 "alternatives": [
@@ -779,17 +845,30 @@ def bql_query(
             }
 
     # ── Neither worked ────────────────────────────────────────────────────────
+    field_valid = (
+        _field_is_valid(request, securities[0], field)
+        if (field and securities) else None
+    )
     raise HTTPException(503, detail={
         "error": "//blp/bql service is not available on this Bloomberg Terminal installation.",
         "reason": "BQL requires a separate Bloomberg BQL API license beyond standard Terminal access.",
-        "alternatives": [
-            "Use the Excel formula shown in the Excel tab — =BQL() works if you have Bloomberg Excel Add-in",
-            "Contact Bloomberg sales to enable BQL API access on your account",
-            "Some fields may be available via BDP with overrides — try the /fields/search endpoint",
-        ],
+        "field_invalid": field_valid is False,
+        "alternatives": (
+            [
+                f"Bloomberg rejected the field '{field}' as not valid. Type FLDS<GO> on "
+                f"the Terminal and search for the concept, then re-query with the real "
+                f"mnemonic.",
+            ]
+            if field_valid is False else
+            [
+                "Use the Excel formula shown below — =BQL() works if you have the Bloomberg Excel Add-in",
+                "Contact Bloomberg sales to enable BQL API access on your account",
+                "Some fields may be available via BDP with overrides — try the /fields/search endpoint",
+            ]
+        ),
         "excel_formula": (
-            f'=BQL("{securities[0] if securities else "<TICKER>"}","{field or "<FIELD>"}","FPT=Q","FPO=0Q","ACT_EST_MAPPING=PRECISE","FS=MRC","CURRENCY=USD","XLFILL=b")'
-            if field else None
+            None if (field_valid is False or not field) else
+            f'=BQL("{securities[0] if securities else "<TICKER>"}","{field}","FPT=Q","FPO=0Q","ACT_EST_MAPPING=PRECISE","FS=MRC","CURRENCY=USD","XLFILL=b")'
         ),
     })
 
@@ -951,7 +1030,11 @@ CHAT_SYSTEM = """You are an expert Bloomberg Terminal and OpenBB API assistant e
 
 1. **NEVER fabricate or guess data values.** Do NOT include any specific number, date, price, EPS, market cap, subscriber count, vehicle delivery figure, store count, or any other factual quantity in your response unless it came from a tool call you made in THIS conversation. Saying "TSLA delivered ~466,000 vehicles in Q3" is FORBIDDEN unless a tool you just called returned that exact number. Users put your output into financial analysis pipelines — fabricated values are dangerous.
 
-2. **NEVER invent Bloomberg field mnemonics.** Bloomberg has tens of thousands of fields and most plausible-sounding names (NUMBER_OF_VEHICLES_SOLD, RETAIL_SUBSCRIBERS, UNIT_SALES_IPHONE, MONTHLY_ACTIVE_USERS, etc.) do NOT exist or return wrong data. Before mentioning ANY field that is not in the verified short list below, you MUST call `fields_search` to confirm it exists. If `fields_search` returns no real match, tell the user the field is not available — do not propose a guess.
+2. **NEVER invent Bloomberg field mnemonics.** Bloomberg has tens of thousands of fields and most plausible-sounding names (NUMBER_OF_VEHICLES_DELIVERED, RETAIL_SUBSCRIBERS, UNIT_SALES_IPHONE, MONTHLY_ACTIVE_USERS, etc.) do NOT exist. Before mentioning ANY field that is not in the verified short list below, you MUST validate it. The validation hierarchy:
+   (a) Call `fields_search`. If it returns matches, pick from those.
+   (b) If `fields_search` returns empty (FLDS not licensed on this Terminal), validate the candidate mnemonic by calling `bdp(securities, fields=CANDIDATE)`. If the response value contains the literal string `[error: Field not valid]`, the mnemonic is fabricated — STOP and tell the user the field could not be verified. Do NOT proceed to emit an =BQL() formula with a fake field.
+   (c) Only if BDP returns a number/null/applicable value (no `[error: ...]`) is the mnemonic confirmed real.
+   When the `bql` tool response includes `"field_invalid": true`, the field has already failed validation — relay that honestly to the user, do not paper over it with a synonym guess. When the `bql` response includes `"excel_formula": null`, do NOT fabricate a replacement formula.
 
 3. **Use tools — don't just describe them.** When the user asks for actual data ("what's AAPL trading at?", "TSLA's revenue last quarter", "SPX members"), call the appropriate tool (`bdp`, `bdh`, `bds`, `bql`, `security_lookup`) and return the real result. Don't just hand the user a URL and stop.
 
