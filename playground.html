@@ -159,6 +159,9 @@
   .xl-label { color: var(--text3); font-size: 10px; font-family: var(--mono); min-width: 80px; padding-top: 2px; }
   .xl-formula { color: var(--green); font-size: 12px; font-family: var(--mono); background: var(--bg3); padding: 4px 8px; border-radius: 3px; border: 1px solid var(--border2); flex: 1; cursor: pointer; word-break: break-all; }
   .xl-formula:hover { border-color: var(--amber); }
+  .xl-copy-btn { flex-shrink: 0; align-self: flex-start; background: var(--bg3); color: var(--green); border: 1px solid var(--green); padding: 3px 9px; border-radius: 3px; cursor: pointer; font-family: var(--mono); font-size: 10px; font-weight: 700; white-space: nowrap; }
+  .xl-copy-btn:hover { background: var(--green); color: #000; }
+  .xl-copy-btn.copied { background: var(--amber); color: #000; border-color: var(--amber); }
   .xl-note { color: var(--text3); font-size: 10px; font-family: var(--mono); margin: 4px 0 0 90px; line-height: 1.5; }
   .xl-copy-hint { color: var(--text3); font-size: 10px; font-family: var(--mono); margin-top: 14px; text-align: center; }
   /* Formula builder */
@@ -367,11 +370,12 @@
         <option value="anthropic">Anthropic (Claude)</option>
         <option value="openai">OpenAI (GPT)</option>
         <option value="google">Google (Gemini)</option>
+        <option value="deepseek">DeepSeek</option>
       </select>
     </div>
     <div style="display:flex;gap:8px;margin-bottom:6px;align-items:center">
       <label style="color:var(--text2);font-size:10px;min-width:100px">Model</label>
-      <input id="settings-model" placeholder="claude-sonnet-4-6"
+      <input id="settings-model" placeholder="claude-opus-4-7"
         style="flex:1;background:var(--bg3);border:1px solid var(--border2);color:var(--text);padding:6px 8px;border-radius:4px;font-family:var(--mono);font-size:11px;outline:none">
     </div>
     <div style="display:flex;gap:8px;margin-bottom:4px;align-items:center">
@@ -609,7 +613,10 @@
               </select>
             </div>
           </div>
-          <div class="xlb-output" id="xlb-output" onclick="xlbCopy()" title="Click to copy">=BDP("","") </div>
+          <div style="display:flex;gap:8px;align-items:stretch;margin:10px 0;">
+            <div class="xlb-output" id="xlb-output" onclick="xlbCopy()" title="Click to copy" style="margin:0;flex:1;">=BDP("","") </div>
+            <button class="xl-copy-btn" id="xlb-copy-btn" onclick="xlbCopy()" title="Copy formula">Copy</button>
+          </div>
           <div class="xlb-hint" id="xlb-hint"></div>
         </div>
         <div style="border-top:1px solid var(--border2);margin-top:14px;padding-top:10px;">
@@ -1516,7 +1523,8 @@ async function sendRequest() {
         <div class="xl-section" style="margin-top:10px">Use in Bloomberg Excel instead</div>
         <div class="xl-row">
           <span class="xl-label">BQL</span>
-          <span class="xl-formula" onclick="navigator.clipboard.writeText(this.textContent)" title="Click to copy">${d.excel_formula}</span>
+          <span class="xl-formula" onclick="copyText(this.nextElementSibling, this.textContent)" title="Click to copy">${d.excel_formula}</span>
+          <button class="xl-copy-btn" onclick="copyText(this, this.previousElementSibling.textContent)" title="Copy formula">Copy</button>
         </div>
         <div class="xl-note" style="margin-left:0;margin-top:8px">Alternatives:<ul style="margin:4px 0 0 16px;padding:0">${alts}</ul></div>`;
       switchTab('excel');
@@ -1760,8 +1768,19 @@ function renderBlp(code, ex, isOpenBBSdk) {
 }
 
 // ─── Excel formula renderer ───────────────────────────────────────────────────
+function copyText(btn, text) {
+  navigator.clipboard.writeText(text).then(() => {
+    if (!btn) return;
+    const orig = btn.textContent;
+    btn.textContent = 'Copied!';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = orig; btn.classList.remove('copied'); }, 1200);
+  });
+}
 function xlFormula(f) {
-  return `<span class="xl-formula" onclick="navigator.clipboard.writeText(this.textContent)" title="Click to copy">${f}</span>`;
+  // Copy button reads from its previous sibling's textContent — robust against any quote nesting in `f`.
+  return `<span class="xl-formula" onclick="copyText(this.nextElementSibling, this.textContent)" title="Click to copy">${f}</span>`
+    + `<button class="xl-copy-btn" onclick="copyText(this, this.previousElementSibling.textContent)" title="Copy formula">Copy</button>`;
 }
 function xlRow(label, formula) {
   return `<div class="xl-row"><span class="xl-label">${label}</span>${xlFormula(formula)}</div>`;
@@ -2009,7 +2028,7 @@ The /bql API endpoint uses the same underlying //blp/bql service.<br><br>
     html += `<div style="color:var(--text3);font-family:var(--mono);font-size:12px;padding:8px 0">No Excel formula available for this endpoint.</div>`;
   }
 
-  html += `<div class="xl-copy-hint">Click any formula to copy to clipboard</div>`;
+  html += `<div class="xl-copy-hint">Click the <strong style="color:var(--green)">Copy</strong> button (or the formula itself) to copy to clipboard</div>`;
   view.innerHTML = html;
   // Keep Formula Builder and Bridge in sync with the current request
   if (typeof xlbSync === 'function') xlbSync();
@@ -2154,7 +2173,8 @@ function xlbUpdate() {
 
 function xlbCopy() {
   const f = document.getElementById('xlb-output').textContent;
-  navigator.clipboard.writeText(f);
+  const btn = document.getElementById('xlb-copy-btn');
+  copyText(btn, f);
   const el = document.getElementById('xlb-output');
   const orig = el.style.borderColor;
   el.style.borderColor = 'var(--amber)';
@@ -2751,9 +2771,10 @@ async function sendChat() {
 
 // ─── Settings modal ───────────────────────────────────────────────────────────
 const _PROVIDER_DEFAULTS = {
-  anthropic: { model: 'claude-sonnet-4-6', placeholder: 'sk-ant-api03-...' },
-  openai:    { model: 'gpt-5.4',            placeholder: 'sk-proj-...' },
+  anthropic: { model: 'claude-opus-4-7',   placeholder: 'sk-ant-api03-...' },
+  openai:    { model: 'gpt-5.5',            placeholder: 'sk-proj-...' },
   google:    { model: 'gemini-2.5-pro',    placeholder: 'AIza...' },
+  deepseek:  { model: 'deepseek-v4',       placeholder: 'sk-...' },
 };
 
 function onProviderChange() {
@@ -2836,7 +2857,7 @@ async function saveSettings() {
   if (key) {
     document.getElementById('settings-status').textContent = 'saving key...';
     const provider = _config.ai_provider || 'anthropic';
-    const keyMap = { anthropic: 'ANTHROPIC_API_KEY', openai: 'OPENAI_API_KEY', google: 'GOOGLE_API_KEY' };
+    const keyMap = { anthropic: 'ANTHROPIC_API_KEY', openai: 'OPENAI_API_KEY', google: 'GOOGLE_API_KEY', deepseek: 'DEEPSEEK_API_KEY' };
     const payload = {};
     payload[keyMap[provider] || 'ANTHROPIC_API_KEY'] = key;
     try {

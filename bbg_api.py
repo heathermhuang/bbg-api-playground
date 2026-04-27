@@ -905,6 +905,7 @@ class ConfigRequest(BaseModel):
     ANTHROPIC_API_KEY: Optional[str] = None
     OPENAI_API_KEY: Optional[str] = None
     GOOGLE_API_KEY: Optional[str] = None
+    DEEPSEEK_API_KEY: Optional[str] = None
 
 _CFG_DIR = os.environ.get("CONFIG_DIR", os.path.dirname(os.path.abspath(__file__)))
 
@@ -912,18 +913,23 @@ _CFG_DIR = os.environ.get("CONFIG_DIR", os.path.dirname(os.path.abspath(__file__
 AI_PROVIDERS = {
     "anthropic": {
         "env_key": "ANTHROPIC_API_KEY",
-        "default_model": "claude-sonnet-4-6",
+        "default_model": "claude-opus-4-7",
         "base_url": "https://api.anthropic.com",
     },
     "openai": {
         "env_key": "OPENAI_API_KEY",
-        "default_model": "gpt-5.4",
+        "default_model": "gpt-5.5",
         "base_url": "https://api.openai.com",
     },
     "google": {
         "env_key": "GOOGLE_API_KEY",
         "default_model": "gemini-2.5-pro",
         "base_url": "https://generativelanguage.googleapis.com",
+    },
+    "deepseek": {
+        "env_key": "DEEPSEEK_API_KEY",
+        "default_model": "deepseek-v4",
+        "base_url": "https://api.deepseek.com",
     },
 }
 
@@ -964,6 +970,8 @@ def set_config(req: ConfigRequest):
             existing["OPENAI_API_KEY"] = req.OPENAI_API_KEY
         if req.GOOGLE_API_KEY is not None:
             existing["GOOGLE_API_KEY"] = req.GOOGLE_API_KEY
+        if req.DEEPSEEK_API_KEY is not None:
+            existing["DEEPSEEK_API_KEY"] = req.DEEPSEEK_API_KEY
         _save_cfg(existing)
         return {"status": "saved"}
     except Exception as e:
@@ -1283,6 +1291,19 @@ CHAT_TOOLS_GOOGLE    = _tools_google()
 _TOOL_RESULT_MAX_CHARS = 8000  # cap per tool result returned to the model
 _MAX_TOOL_TURNS = 6            # safety cap on multi-turn tool loops
 
+def _llm_httpx_kwargs(timeout: int = 120) -> dict:
+    """Kwargs for httpx clients that talk to LLM providers.
+
+    Honors HTTP_PROXY / HTTPS_PROXY env vars by default (trust_env=True), so
+    outbound LLM traffic is routed through the user's configured forward proxy
+    (e.g. Clash on 192.168.1.142:7897). Set LLM_USE_PROXY=0 to bypass the
+    proxy and go direct — useful when the proxy breaks the SSL handshake
+    ('UNEXPECTED_EOF_WHILE_READING') but direct egress works.
+    """
+    flag = os.environ.get("LLM_USE_PROXY", "1").strip().lower()
+    use_proxy = flag not in ("0", "false", "no", "off")
+    return {"timeout": timeout, "trust_env": use_proxy}
+
 async def _exec_tool(name: str, input_data: dict) -> str:
     """Execute a chat tool by calling our own loopback API. Returns a JSON string.
 
@@ -1345,6 +1366,10 @@ async def chat(request: Request, req: ChatRequest):
         generator = _stream_openai(api_key, model, messages)
     elif provider == "google":
         generator = _stream_google(api_key, model, messages)
+    elif provider == "deepseek":
+        # DeepSeek's chat API is OpenAI-compatible; reuse the OpenAI loop with their base URL.
+        ds_base = os.environ.get("DEEPSEEK_BASE_URL") or info["base_url"]
+        generator = _stream_openai(api_key, model, messages, base_url=ds_base, provider_label="DeepSeek")
     else:
         raise HTTPException(400, detail=f"Provider '{provider}' not implemented")
 
@@ -1391,7 +1416,7 @@ async def _stream_anthropic(api_key, model, messages):
         upstream_error = None
         for attempt in range(3):
             try:
-                async with httpx.AsyncClient(timeout=120) as client:
+                async with httpx.AsyncClient(**_llm_httpx_kwargs(120)) as client:
                     async with client.stream("POST", f"{base_url}/v1/messages",
                                              headers=headers, json=body) as resp:
                         if resp.status_code != 200:
@@ -1448,10 +1473,19 @@ async def _stream_anthropic(api_key, model, messages):
                     continue
 
         if upstream_error is not None:
+            flag = os.environ.get("LLM_USE_PROXY", "1").strip().lower()
+            using_proxy = flag not in ("0", "false", "no", "off")
+            proxy_url = os.environ.get("HTTPS_PROXY") or os.environ.get("HTTP_PROXY") or "(none set)"
+            if using_proxy:
+                hint = (f"Routing through forward proxy {proxy_url}. The proxy may be "
+                        f"down, rate-limited, or breaking the TLS handshake to "
+                        f"api.anthropic.com. Set LLM_USE_PROXY=0 to bypass it.")
+            else:
+                hint = ("Direct egress to api.anthropic.com is failing. Check "
+                        "internet connectivity, or set LLM_USE_PROXY=1 to route "
+                        "through a forward proxy.")
             msg = (f"[Cannot reach Anthropic API after 3 attempts: "
-                   f"{type(upstream_error).__name__}. The corporate forward "
-                   f"proxy may be down or rate-limited. Local server is up; "
-                   f"upstream is unreachable. Try again in a moment.]")
+                   f"{type(upstream_error).__name__}: {upstream_error}. {hint}]")
             yield f"data: {_json.dumps({'type':'text','text': msg})}\n\n"
             yield "data: [DONE]\n\n"
             return
@@ -1502,15 +1536,19 @@ async def _stream_anthropic(api_key, model, messages):
     yield "data: [DONE]\n\n"
 
 
-async def _stream_openai(api_key, model, messages):
-    """Tool-use loop against OpenAI-compatible chat.completions.
+async def _stream_openai(api_key, model, messages, base_url=None, provider_label="OpenAI"):
+    """Tool-use loop against an OpenAI-compatible chat.completions endpoint.
+
+    Reused for any provider that exposes the OpenAI Chat Completions schema
+    (OpenAI, DeepSeek, Mistral, etc.). Pass `base_url` to target a different
+    host; `provider_label` is only used in user-facing error messages.
 
     Uses non-streaming requests so we can cleanly assemble tool_calls between
     turns; final assistant text is delivered in chunks so the UI still feels
     incremental (most providers only batch a few KB of text per turn).
     """
     import httpx, json as _json
-    base_url = os.environ.get("OPENAI_BASE_URL", "https://api.openai.com")
+    base_url = base_url or os.environ.get("OPENAI_BASE_URL", "https://api.openai.com")
     headers = {
         "content-type": "application/json",
         "authorization": f"Bearer {api_key}",
@@ -1527,18 +1565,18 @@ async def _stream_openai(api_key, model, messages):
             "tools": CHAT_TOOLS_OPENAI,
             "tool_choice": "auto",
         }
-        async with httpx.AsyncClient(timeout=120) as client:
+        async with httpx.AsyncClient(**_llm_httpx_kwargs(120)) as client:
             r = await client.post(f"{base_url}/v1/chat/completions",
                                   headers=headers, json=body)
         if r.status_code != 200:
             err = r.text[:500]
-            yield f"data: {_json.dumps({'type':'text','text': f'[OpenAI API error {r.status_code}]: {err}'})}\n\n"
+            yield f"data: {_json.dumps({'type':'text','text': f'[{provider_label} API error {r.status_code}]: {err}'})}\n\n"
             yield "data: [DONE]\n\n"
             return
         try:
             data = r.json()
         except Exception:
-            yield f"data: {_json.dumps({'type':'text','text': '[OpenAI: non-JSON response]'})}\n\n"
+            yield f"data: {_json.dumps({'type':'text','text': f'[{provider_label}: non-JSON response]'})}\n\n"
             yield "data: [DONE]\n\n"
             return
 
@@ -1614,7 +1652,7 @@ async def _stream_google(api_key, model, messages):
             "generationConfig": {"maxOutputTokens": 2048},
         }
         url = f"{base_url}/v1beta/models/{model}:generateContent"
-        async with httpx.AsyncClient(timeout=120) as client:
+        async with httpx.AsyncClient(**_llm_httpx_kwargs(120)) as client:
             r = await client.post(url, headers=headers, json=body)
         if r.status_code != 200:
             err = r.text[:500]
